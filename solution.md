@@ -12,8 +12,8 @@
 | Type | Agricultural Decision Support Platform |
 | Target Users | Smallholder farmers — Tamil Nadu & Andhra Pradesh |
 | Interface | Progressive Web App (PWA), mobile-first, Android-installable |
-| Deployment | Self-hosted Docker Compose, CPU-only |
-| Cloud Cost | $0.00 (hard constraint) |
+| Deployment | Hybrid (Supabase Cloud + Self-hosted n8n/Dify/ML) |
+| Cloud Cost | Managed via Free Tiers (Supabase, Groq/OpenRouter) |
 | Stage | Research prototype — not yet in field trial |
 
 **Problem:** India's extension worker-to-farmer ratio has fallen below 1:5,000. Krishi Sakhi replaces fragmented, inaccessible advisory with a single grounded AI-assisted interface operable on low-end smartphones under intermittent connectivity.
@@ -31,18 +31,18 @@ graph TB
     end
 
     subgraph ORCH["Layer 2 — Orchestration (n8n + Dify)"]
-        N8N["n8n\nWebhook Router"]
-        DIFY["Dify Community Edition\nRAG Agent"]
-        FAISS["FAISS Vector Store\nnomic-embed-text embeddings"]
-        LLM["Llama 3.1 8B\nvia Ollama (CPU-only)"]
+        N8N["n8n\nWebhook Router, S3 Push, Data Pipeline"]
+        DIFY["Dify Community Edition\nRAG Agent Chatbot"]
+        FAISS["FAISS Vector Store\nEmbeddings via n8n/Cloud"]
+        LLM["Cloud LLM\nGroq / OpenRouter API"]
         KB["Knowledge Base\n300–500 token chunks\nMetadata: region/crop/season/topic"]
     end
 
-    subgraph BACKEND["Layer 3 — Backend & Data (FastAPI + Supabase)"]
+    subgraph BACKEND["Layer 3 — Backend & Data (FastAPI + Supabase Cloud)"]
         API["FastAPI Backend\nAuth / Routing / Context Assembly"]
-        SUPA_DB["Supabase PostgreSQL\nAll structured data + RLS"]
-        SUPA_S3["Supabase Storage (S3)\nsoil-images / pest-images"]
-        SUPA_AUTH["Supabase Auth\nPhone OTP / JWT"]
+        SUPA_DB["Supabase PostgreSQL (Cloud)\nAll structured data + RLS"]
+        SUPA_S3["Supabase Storage S3 (Cloud)\nsoil-images / pest-images"]
+        SUPA_AUTH["Supabase Auth (Cloud)\nPhone OTP / JWT"]
     end
 
     subgraph ML["ML Microservices (independent FastAPI services)"]
@@ -67,6 +67,7 @@ graph TB
     API --> SUPA_DB
     API --> WEATHER
     N8N --> DIFY
+    N8N -.->|S3 Push| SUPA_S3
     DIFY --> FAISS
     FAISS --> KB
     DIFY --> LLM
@@ -554,14 +555,14 @@ flowchart TD
 | Frontend | Voice capture | Browser MediaRecorder API (native) |
 | Frontend | Offline | Service Worker |
 | Backend | API | FastAPI (Python) |
-| Backend | Auth | Supabase Auth — Phone OTP |
-| Backend | Database | Supabase PostgreSQL (self-hosted) |
-| Backend | Storage | Supabase Storage / S3 (self-hosted) |
-| Orchestration | Workflow | n8n (self-hosted Docker) |
-| RAG | Agent | Dify Community Edition (self-hosted Docker) |
+| Backend | Auth | Supabase Auth (Cloud) — Phone OTP |
+| Backend | Database | Supabase PostgreSQL (Cloud) |
+| Backend | Storage | Supabase Storage / S3 (Cloud) |
+| Orchestration | Workflow & Data | n8n (Handles S3 uploads, embeddings, webhooks) |
+| RAG | Agent | Dify Community Edition (Chatbot support) |
 | RAG | Vector search | FAISS |
-| RAG | Embeddings | nomic-embed-text via Ollama |
-| RAG | LLM | Llama 3.1 8B via Ollama (CPU-only) |
+| RAG | Embeddings | Generated via n8n / Cloud API |
+| RAG | LLM | Groq / OpenRouter API (Free tier) |
 | ML | Voice | Whisper base 74M (local) |
 | ML | Soil | YOLOv8n (Ultralytics, classification mode) |
 | ML | Crops | Random Forest (scikit-learn) |
@@ -570,11 +571,9 @@ flowchart TD
 | External | Weather | Open-Meteo (free, no key) |
 | External | Mandi prices | data.gov.in (free, open government) |
 
-**Hard constraints (non-negotiable):**
-- Zero cloud cost ($0.00)
-- CPU-only inference
-- No OpenAI / Anthropic / cloud LLM API
-- All services self-hosted
+**Constraints & Strategy:**
+- Utilize free tiers for cloud services (Supabase Cloud, Groq, OpenRouter) to preserve local system resources.
+- Offload heavy tasks (cloud LLM, Cloud DB) overhead while keeping orchestration flexible.
 
 ---
 
@@ -635,16 +634,16 @@ flowchart TD
 
 ## 16. Agent Behavioural Rules
 
-1. Never use cloud LLM API (OpenAI, Anthropic, Gemini) in advisory pipeline — Llama 3.1 8B local only.
+1. Utilize Groq / OpenRouter free tiers for LLM capabilities to save local computation.
 2. Never store voice audio anywhere — memory-only, transcribe-and-discard.
 3. Never bypass RLS with service role key in application code — service role for migrations/admin only.
 4. Always populate `advisory_messages.context_block_sent` and `retrieved_chunk_ids` on every turn.
 5. Validate `farmer_id` against `auth.uid()` before any write operation.
 6. Do not modify `ref_*` tables through application layer — migration-controlled only.
-7. Dify knowledge base and PostgreSQL are separate stores — do not auto-sync.
+7. Leverage n8n for data pipelines, Supabase S3 bucket pushes, and embedding generation where possible.
 8. When safety guardrail is ambiguous — defer to KVK and log.
 9. All new tables must include `farmer_id uuid FK → farmers.id` + RLS before production use.
-10. Context assembly must remain a single-pass read — no recursive queries, no paginated fetches.
+10. Supabase Cloud is the source of truth for DB and Storage; context assembly still requires single-pass reads.
 
 ---
 
