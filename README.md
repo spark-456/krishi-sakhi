@@ -1,6 +1,6 @@
 # 🌾 Krishi Sakhi — *Farmer's Friend*
 
-> An AI-powered Agricultural Decision Support Platform for smallholder farmers in Tamil Nadu & Andhra Pradesh, India.
+> An AI-powered Agricultural Decision Support Platform for smallholder farmers in India.
 
 ---
 
