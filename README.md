@@ -2,11 +2,13 @@
 
 > An AI-powered Agricultural Decision Support Platform for smallholder farmers in India.
 
+
 <p align="center">
-  <img src="frontend/public/screenshots/FarmerRegistrationFlow.png" width="30%" />
-  <img src="frontend/public/screenshots/HomeDashboard.png" width="30%" />
-  <img src="frontend/public/screenshots/MyFarmsAndCropsList.png" width="30%" />
+  <img src="frontend/public/screenshots/Get-started.png" width="30%" />
+  <img src="frontend/public/screenshots/Dashboard-new.png" width="30%" />
+  <img src="frontend/public/screenshots/Log-phone.png" width="30%" />
 </p>
+
 
 ---
 
