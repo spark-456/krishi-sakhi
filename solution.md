@@ -30,10 +30,9 @@ graph TB
         SW["Service Worker\nOffline + Deferred Sync"]
     end
 
-    subgraph ORCH["Layer 2 — Orchestration (n8n + Dify)"]
-        N8N["n8n\nWebhook Router, S3 Push, Data Pipeline"]
+    subgraph ORCH["Layer 2 — Advisory (Dify)"]
         DIFY["Dify Community Edition\nRAG Agent Chatbot"]
-        FAISS["FAISS Vector Store\nEmbeddings via n8n/Cloud"]
+        FAISS["FAISS Vector Store\nnomic-embed-text Embeddings"]
         LLM["Cloud LLM\nGroq / OpenRouter API"]
         KB["Knowledge Base\n300–500 token chunks\nMetadata: region/crop/season/topic"]
     end
@@ -62,12 +61,10 @@ graph TB
     INPUT --> API
     SW -.->|offline cache| PWA
     API --> SUPA_AUTH
-    API --> N8N
+    API --> DIFY
     API --> ML
     API --> SUPA_DB
     API --> WEATHER
-    N8N --> DIFY
-    N8N -.->|S3 Push| SUPA_S3
     DIFY --> FAISS
     FAISS --> KB
     DIFY --> LLM
@@ -88,7 +85,6 @@ sequenceDiagram
     participant MLService as ML Microservice
     participant SupaDB as Supabase DB
     participant OpenMeteo
-    participant n8n
     participant Dify
     participant LLM as Cloud LLM (with Local Fallback)
 
@@ -113,14 +109,12 @@ sequenceDiagram
 
     FastAPI->>FastAPI: Assemble context_block_sent (JSON)
 
-    FastAPI->>n8n: POST webhook (farmer_input_text + context_block + ml_outputs)
-    n8n->>Dify: Forward with structured payload
+    FastAPI->>Dify: POST Chat API (farmer_input_text + context_block + ml_outputs)
     Dify->>Dify: FAISS vector search (metadata-filtered: region/crop/season/topic)
     Dify->>LLM: Generate response with retrieved chunks
     LLM-->>Dify: Response text
     Dify->>Dify: Evaluate safety guardrails
-    Dify-->>n8n: Formatted response
-    n8n-->>FastAPI: Response
+    Dify-->>FastAPI: Formatted response
 
     FastAPI->>SupaDB: INSERT advisory_messages (full audit record)
     FastAPI->>SupaDB: INCREMENT advisory_sessions.total_turns (trigger)
@@ -144,7 +138,7 @@ erDiagram
     }
 
     farmers {
-        uuid id PK_FK
+        uuid id PK, FK
         text full_name
         text preferred_language
         text state
@@ -185,7 +179,7 @@ erDiagram
 
     yield_records {
         uuid id PK
-        uuid crop_record_id FK_UNIQUE
+        uuid crop_record_id FK, UK
         uuid farmer_id FK
         numeric yield_kg
         numeric sale_price_per_kg
@@ -223,7 +217,7 @@ erDiagram
         text farmer_input_text
         numeric whisper_confidence
         jsonb context_block_sent
-        text[] retrieved_chunk_ids
+        text_array retrieved_chunk_ids
         text response_text
         boolean was_deferred_to_kvk
         integer response_latency_ms
@@ -290,7 +284,7 @@ erDiagram
         text crop_name_ta
         text crop_name_te
         text crop_type
-        text[] typical_seasons
+        text_array typical_seasons
     }
 
     ref_locations {
@@ -392,7 +386,7 @@ flowchart TD
     D --> E[SELECT expense_logs\nLast 30 days, active crop\nGROUP BY category → SUM amount_inr]
     A --> F[Open-Meteo API\ntemp, humidity, rainfall, forecast]
     B & C & D & E & F --> G[Assemble context_block_sent JSONB]
-    G --> H[POST to n8n webhook]
+    G --> H[POST to Dify Chat API]
 ```
 
 **context_block_sent structure:**
@@ -476,8 +470,7 @@ graph TD
 
 ```mermaid
 flowchart LR
-    QUERY["Farmer Query\n+ context_block"] --> N8N["n8n webhook"]
-    N8N --> DIFY["Dify RAG Agent"]
+    QUERY["Farmer Query\n+ context_block"] --> DIFY["Dify RAG Agent\nChat API"]
     DIFY --> FILTER["Metadata filter:\nregion / crop / season / topic"]
     FILTER --> FAISS["FAISS top-k vector search\nnomic-embed-text embeddings\n300–500 token chunks"]
     FAISS --> CHUNKS["Retrieved chunks"]
@@ -558,10 +551,10 @@ flowchart TD
 | Backend | Auth | Supabase Auth (Cloud) — Phone OTP |
 | Backend | Database | Supabase PostgreSQL (Cloud) |
 | Backend | Storage | Supabase Storage / S3 (Cloud) |
-| Orchestration | Workflow & Data | n8n (Handles S3 uploads, embeddings, webhooks) |
+| Orchestration | Workflow & Data | Dify (Direct Chat API integration with FastAPI) |
 | RAG | Agent | Dify Community Edition (Chatbot support) |
 | RAG | Vector search | FAISS |
-| RAG | Embeddings | Generated via n8n / Cloud API |
+| RAG | Embeddings | nomic-embed-text via Ollama |
 | RAG | LLM | Cloud API (Primary) / Local Llama (Fallback) |
 | ML | Voice | Whisper base 74M (local) |
 | ML | Soil | YOLOv8n (Ultralytics, classification mode) |
@@ -669,8 +662,7 @@ flowchart TD
 │   ├── price_forecaster/  # Prophet FastAPI service
 │   └── transcriber/       # Whisper FastAPI service
 │
-├── n8n/                   # n8n workflow exports
-├── dify/                  # Dify config, knowledge base ingestion scripts
+├── dify/                  # Dify config, chatflow exports, knowledge base ingestion scripts
 ├── supabase/
 │   ├── migrations/        # 001–019 ordered SQL migrations
 │   └── seed/              # ref_crops, ref_locations data

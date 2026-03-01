@@ -29,14 +29,13 @@ The system is composed of three loosely coupled layers. Every agent working on t
 - **Auth:** Supabase JWT tokens — phone number is the primary login method (not email; rural users do not reliably have email)
 - **Language:** English UI currently; Tamil and Telugu are planned future work
 
-### 2.2 Layer 2 — Orchestration and Advisory (n8n + Dify)
-- **n8n** (self-hosted via Docker) handles webhook routing between the FastAPI backend and the Dify RAG agent
-- **Dify Community Edition** (self-hosted via Docker) is the RAG agent
+### 2.2 Layer 2 — Advisory (Dify)
+- **Dify Community Edition** (self-hosted via Docker) is the RAG agent, connected directly to the FastAPI backend via HTTP API
   - Knowledge base: curated agricultural documents chunked into 300–500 token segments
   - Embeddings: `nomic-embed-text` via Ollama
   - Retrieval: FAISS vector search with metadata-filtered top-k (filters: region, crop, season, topic category)
   - LLM: **Cloud LLM API** (e.g., Groq, OpenAI) is the primary model, with local **Llama 3.1 8B** via Ollama acting as a fallback
-- **n8n workflow per request:** receive webhook → inject farmer context → call Dify agent → format response → return to FastAPI
+- **Request flow:** FastAPI assembles farmer context → POSTs directly to Dify Chat API → Dify performs RAG + LLM generation → returns response to FastAPI
 - **Safety constraints:** the advisory layer has explicit policy guardrails — it will refuse specific pesticide dosages, financial predictions, and non-agricultural advice, and defer to Krishi Vigyan Kendra (KVK) for unsafe queries
 
 ### 2.3 Layer 3 — Backend and Data (FastAPI + Supabase)
@@ -50,7 +49,7 @@ The system is composed of three loosely coupled layers. Every agent working on t
 
 ## 3. ML Microservices
 
-Each ML module is deployed as an independent FastAPI microservice. They are called by the main FastAPI backend and their structured outputs are appended to the farmer context block before it is sent to n8n/Dify. Agents must never treat these as monolithic — they are independently replaceable.
+Each ML module is deployed as an independent FastAPI microservice. They are called by the main FastAPI backend and their structured outputs are appended to the farmer context block before it is sent to Dify. Agents must never treat these as monolithic — they are independently replaceable.
 
 ### 3.1 Soil Classification
 - **Model:** YOLOv8n (classification mode)
@@ -106,17 +105,17 @@ This is the exact sequence for a single farmer query. Every agent touching the b
    └── Open-Meteo API: live weather for farmer's district
    └── ML microservice output (if image was uploaded)
 
-3. FastAPI triggers n8n webhook with:
+3. FastAPI POSTs directly to Dify Chat API with:
    └── farmer_input_text
-   └── assembled context block (JSON)
+   └── assembled context block (JSON) injected as conversation variables
    └── pre-computed ML outputs
 
-4. n8n forwards to Dify RAG agent:
-   └── Dify performs FAISS vector search with metadata filters
+4. Dify RAG agent:
+   └── Performs FAISS vector search with metadata filters
    └── Cloud LLM (or local Llama fallback) generates grounded response using retrieved chunks
    └── Safety guardrails evaluated
 
-5. Dify returns response to n8n → n8n returns to FastAPI
+5. Dify returns response directly to FastAPI
 
 6. FastAPI:
    └── Returns response to PWA
@@ -400,7 +399,6 @@ Agents must adhere to this architectural vision. Cloud API LLMs are preferred fo
 | Auth | Supabase Auth | Phone/OTP |
 | Database | Supabase PostgreSQL | Self-hosted |
 | Object storage | Supabase Storage (S3) | Self-hosted |
-| Orchestration | n8n | Self-hosted via Docker |
 | RAG agent | Dify Community Edition | Self-hosted via Docker |
 | Vector search | FAISS | Within Dify |
 | Embeddings | nomic-embed-text | Via Ollama |
@@ -427,7 +425,7 @@ Every agent writing database migrations or policies must implement these. These 
 
 ## 10. Safety and Advisory Guardrails
 
-These constraints are implemented in the Dify agent prompt and n8n workflow. Any agent modifying the advisory pipeline must preserve all of them.
+These constraints are implemented in the Dify agent prompt. Any agent modifying the advisory pipeline must preserve all of them.
 
 - The system will **never** provide specific pesticide dosages or chemical formulations
 - The system will **never** make financial predictions or guaranteed market price forecasts
@@ -520,8 +518,7 @@ These rules apply to any AI agent or automated system processing this document.
 │   ├── price_forecaster/  # Prophet FastAPI service
 │   └── transcriber/       # Whisper FastAPI service
 │
-├── n8n/                   # n8n workflow exports
-├── dify/                  # Dify config, knowledge base ingestion scripts
+├── dify/                  # Dify config, chatflow exports, knowledge base ingestion scripts
 ├── supabase/
 │   ├── migrations/        # All schema migrations in order
 │   └── seed/              # ref_crops, ref_locations seed data
