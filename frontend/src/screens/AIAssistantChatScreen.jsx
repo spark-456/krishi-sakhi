@@ -1,18 +1,36 @@
+/**
+ * AIAssistantChatScreen — Ask Sakhi
+ * ──────────────────────────────────
+ * Chat interface connected to Dify Chat API.
+ * Preserves conversation_id for multi-turn context.
+ * New Session button resets the conversation.
+ *
+ * Fallback: If Dify is unreachable, shows graceful error message.
+ *
+ * @see frontend-engineer.md §8 — Route: /assistant, Auth: Yes
+ */
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Send, Mic, Image as ImageIcon, Sparkles, User, FileText } from 'lucide-react';
+import { ArrowLeft, Send, Mic, Image as ImageIcon, Sparkles, User, RotateCcw, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { sendMessage as diftySendMessage } from '../lib/difyClient';
+import { useAuth } from '../hooks/useAuth';
 
 const AIAssistantChatScreen = () => {
+    const { user } = useAuth();
+
+    // Chat state
     const [messages, setMessages] = useState([
         {
-            id: 1,
+            id: crypto.randomUUID(),
             sender: 'ai',
-            text: "Namaste! I am Sakhi, your farming expert. I noticed your wheat crop is in the vegetative stage. How can I help you today?",
-            time: "10:00 AM",
-            suggestions: ["When should I apply urea?", "Check weather forecast", "Scan crop for diseases"]
+            text: "Namaste! I am Sakhi, your farming expert. How can I help you today?",
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            suggestions: ["What crops suit my soil?", "Check weather forecast", "How to improve yield?"]
         }
     ]);
     const [input, setInput] = useState('');
+    const [isTyping, setIsTyping] = useState(false);
+    const [conversationId, setConversationId] = useState(null);
     const messagesEndRef = useRef(null);
 
     const scrollToBottom = () => {
@@ -21,26 +39,65 @@ const AIAssistantChatScreen = () => {
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages]);
+    }, [messages, isTyping]);
 
-    const handleSend = (text = input) => {
-        if (!text.trim()) return;
+    const handleSend = async (text = input) => {
+        if (!text.trim() || isTyping) return;
 
-        // Add user message
-        const newUserMsg = { id: Date.now(), sender: 'user', text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
-        setMessages(prev => [...prev, newUserMsg]);
+        const userMsgId = crypto.randomUUID();
+        const userMsg = {
+            id: userMsgId,
+            sender: 'user',
+            text: text.trim(),
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+
+        setMessages(prev => [...prev, userMsg]);
         setInput('');
+        setIsTyping(true);
 
-        // Simulate AI typing and response
-        setTimeout(() => {
-            const aiResponse = {
-                id: Date.now() + 1,
+        try {
+            const userId = user?.id || 'demo-user';
+            const response = await diftySendMessage(text.trim(), conversationId, userId);
+
+            // Update conversation ID for multi-turn context
+            if (response.conversation_id) {
+                setConversationId(response.conversation_id);
+            }
+
+            const aiMsg = {
+                id: crypto.randomUUID(),
                 sender: 'ai',
-                text: "I understand you are asking about: '" + text + "'. As an AI model placeholder, I will connect to the backend logic (Dify/Langchain) once it is integrated to provide an accurate agricultural response based on local real-time context.",
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                text: response.answer,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
-            setMessages(prev => [...prev, aiResponse]);
-        }, 1500);
+
+            setMessages(prev => [...prev, aiMsg]);
+        } catch (error) {
+            console.error('[Chat] Unexpected error:', error);
+            const errorMsg = {
+                id: crypto.randomUUID(),
+                sender: 'ai',
+                text: "I'm sorry, something went wrong. Please try again.",
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            };
+            setMessages(prev => [...prev, errorMsg]);
+        } finally {
+            setIsTyping(false);
+        }
+    };
+
+    const handleNewChat = () => {
+        setConversationId(null);
+        setMessages([
+            {
+                id: crypto.randomUUID(),
+                sender: 'ai',
+                text: "Namaste! Starting a new conversation. How can I help you today?",
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                suggestions: ["What crops suit my soil?", "Check weather forecast", "How to improve yield?"]
+            }
+        ]);
     };
 
     return (
@@ -66,8 +123,13 @@ const AIAssistantChatScreen = () => {
                         </div>
                     </div>
                 </div>
-                <button className="p-2 hover:bg-white/10 rounded-full transition-colors">
-                    <FileText className="w-5 h-5" />
+                {/* New Chat Button */}
+                <button
+                    onClick={handleNewChat}
+                    className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                    title="Start new conversation"
+                >
+                    <RotateCcw className="w-5 h-5" />
                 </button>
             </header>
 
@@ -96,8 +158,8 @@ const AIAssistantChatScreen = () => {
 
                             {/* Message Bubble */}
                             <div className={`relative px-4 py-3 rounded-2xl shadow-sm text-[15px] leading-relaxed ${msg.sender === 'user'
-                                    ? 'bg-primary text-white rounded-tr-sm'
-                                    : 'bg-white border border-slate-100 text-slate-800 rounded-tl-sm'
+                                ? 'bg-primary text-white rounded-tr-sm'
+                                : 'bg-white border border-slate-100 text-slate-800 rounded-tl-sm'
                                 }`}>
                                 {msg.text}
                                 <div className={`text-[10px] mt-1.5 opacity-70 font-medium ${msg.sender === 'user' ? 'text-right text-green-100' : 'text-slate-400'}`}>
@@ -113,7 +175,8 @@ const AIAssistantChatScreen = () => {
                                     <button
                                         key={idx}
                                         onClick={() => handleSend(s)}
-                                        className="bg-green-50 border border-green-200 text-green-700 text-xs font-semibold px-3 py-2 rounded-xl hover:bg-green-100 hover:border-green-300 transition-colors shadow-sm"
+                                        disabled={isTyping}
+                                        className="bg-green-50 border border-green-200 text-green-700 text-xs font-semibold px-3 py-2 rounded-xl hover:bg-green-100 hover:border-green-300 transition-colors shadow-sm disabled:opacity-50"
                                     >
                                         {s}
                                     </button>
@@ -122,6 +185,23 @@ const AIAssistantChatScreen = () => {
                         )}
                     </div>
                 ))}
+
+                {/* Typing Indicator */}
+                {isTyping && (
+                    <div className="flex items-start gap-2">
+                        <div className="w-8 h-8 rounded-full bg-white shadow-sm flex-shrink-0 flex items-center justify-center border border-slate-100 mt-1">
+                            <span className="text-sm">👩🏽‍🌾</span>
+                        </div>
+                        <div className="bg-white border border-slate-100 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div ref={messagesEndRef} />
             </div>
 
@@ -139,14 +219,20 @@ const AIAssistantChatScreen = () => {
                         placeholder="Type your farming question..."
                         className="flex-1 max-h-32 min-h-[44px] bg-transparent resize-none outline-none py-3 text-[15px] text-slate-800"
                         rows={1}
+                        disabled={isTyping}
                     />
 
                     {input.trim() ? (
                         <button
                             onClick={() => handleSend()}
-                            className="p-3 mb-0.5 bg-primary text-white rounded-full hover:bg-primary/90 transition-transform active:scale-95 shrink-0 shadow-md shadow-primary/20"
+                            disabled={isTyping}
+                            className="p-3 mb-0.5 bg-primary text-white rounded-full hover:bg-primary/90 transition-transform active:scale-95 shrink-0 shadow-md shadow-primary/20 disabled:opacity-50"
                         >
-                            <Send className="w-4 h-4 ml-0.5" />
+                            {isTyping ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <Send className="w-4 h-4 ml-0.5" />
+                            )}
                         </button>
                     ) : (
                         <button className="p-3 mb-0.5 bg-slate-200 text-slate-600 rounded-full hover:bg-slate-300 transition-colors shrink-0">

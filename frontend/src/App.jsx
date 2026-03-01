@@ -1,3 +1,12 @@
+/**
+ * App — Root Component & Router
+ * ─────────────────────────────
+ * Defines all routes. Protected routes wrapped in AuthGuard.
+ * BottomNavigation shown on authenticated app screens.
+ *
+ * @see frontend-engineer.md §2 — Screen Inventory
+ * @see frontend-engineer.md §5 — Auth Guard Pattern
+ */
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
@@ -13,6 +22,7 @@ import FarmFinanceTracker from './screens/FarmFinanceTracker';
 import CropDiseaseDetectionCamera from './screens/CropDiseaseDetectionCamera';
 
 import BottomNavigation from './components/BottomNavigation';
+import AuthGuard from './components/AuthGuard';
 
 const App = () => {
   return (
@@ -23,16 +33,34 @@ const App = () => {
           {/* Public Routes */}
           <Route path="/" element={<WelcomeScreen />} />
           <Route path="/login" element={<PhoneNumberLogin />} />
-          <Route path="/register" element={<FarmerRegistrationFlow />} />
 
-          {/* Main App Routes */}
-          <Route path="/dashboard" element={<><HomeDashboard /><BottomNavigation /></>} />
-          <Route path="/farms" element={<><MyFarmsAndCropsList /><BottomNavigation /></>} />
-          <Route path="/add-farm" element={<AddNewFarmScreen />} />
-          <Route path="/assistant" element={<><AIAssistantChatScreen /><BottomNavigation /></>} />
-          <Route path="/activity" element={<><FarmActivityLogs /><BottomNavigation /></>} />
-          <Route path="/finance" element={<FarmFinanceTracker />} />
-          <Route path="/camera" element={<CropDiseaseDetectionCamera />} />
+          {/* Registration — needs auth session but not full onboarding */}
+          <Route path="/register" element={
+            <AuthGuard><FarmerRegistrationFlow /></AuthGuard>
+          } />
+
+          {/* Protected App Routes */}
+          <Route path="/dashboard" element={
+            <AuthGuard><><HomeDashboard /><BottomNavigation /></></AuthGuard>
+          } />
+          <Route path="/farms" element={
+            <AuthGuard><><MyFarmsAndCropsList /><BottomNavigation /></></AuthGuard>
+          } />
+          <Route path="/add-farm" element={
+            <AuthGuard><AddNewFarmScreen /></AuthGuard>
+          } />
+          <Route path="/assistant" element={
+            <AuthGuard><><AIAssistantChatScreen /><BottomNavigation /></></AuthGuard>
+          } />
+          <Route path="/activity" element={
+            <AuthGuard><><FarmActivityLogs /><BottomNavigation /></></AuthGuard>
+          } />
+          <Route path="/finance" element={
+            <AuthGuard><FarmFinanceTracker /></AuthGuard>
+          } />
+          <Route path="/camera" element={
+            <AuthGuard><CropDiseaseDetectionCamera /></AuthGuard>
+          } />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
