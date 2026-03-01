@@ -1,0 +1,480 @@
+app:
+  description: ''
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: advanced-chat
+  name: chatflow - krishi sakhi
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openrouter:0.0.30@5b8912ffd2b9b26fe5e12e1dd9891f9a8626b2309b0a88e1f5420b6b359cdfc7
+    version: null
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/cohere:0.0.8@1456818eb78f25c1a25e91809cecbd78e5523d39868dcb78607e625913b5e4fe
+    version: null
+kind: app
+version: 0.5.0
+workflow:
+  conversation_variables: []
+  environment_variables:
+  - description: ''
+    id: 9ca40b3b-6dc7-4f69-a53c-53cf7f3970f4
+    name: Supabase_Secret_Key
+    selector:
+    - env
+    - Supabase_Secret_Key
+    value: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImprbWdnd2RpemFjYW5ydG9zZWZqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjI3MjUyOSwiZXhwIjoyMDg3ODQ4NTI5fQ.f7CoYJCXJ0RaDZbB1CLhWhMCcw6LZPyL_tCKJ5BtC7o
+    value_type: string
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        attachment_image_file_size_limit: 2
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        file_upload_limit: 20
+        image_file_batch_limit: 10
+        image_file_size_limit: 10
+        single_chunk_attachment_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        sourceType: llm
+        targetType: answer
+      id: llm-answer
+      source: llm
+      sourceHandle: source
+      target: answer
+      targetHandle: target
+      type: custom
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: if-else
+      id: 1772354158297-source-1772354481403-target
+      source: '1772354158297'
+      sourceHandle: source
+      target: '1772354481403'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: if-else
+        targetType: http-request
+      id: 1772354481403-true-1772354691995-target
+      source: '1772354481403'
+      sourceHandle: 'true'
+      target: '1772354691995'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: http-request
+        targetType: llm
+      id: 1772354691995-source-llm-target
+      source: '1772354691995'
+      sourceHandle: source
+      target: llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: if-else
+        targetType: http-request
+      id: 1772354481403-fbf740d8-d5a7-4e7e-a759-19006c835939-1772355357386-target
+      source: '1772354481403'
+      sourceHandle: fbf740d8-d5a7-4e7e-a759-19006c835939
+      target: '1772355357386'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: if-else
+        targetType: llm
+      id: 1772354481403-false-llm-target
+      source: '1772354481403'
+      sourceHandle: 'false'
+      target: llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: knowledge-retrieval
+        targetType: llm
+      id: 1772356370639-source-llm-target
+      source: '1772356370639'
+      sourceHandle: source
+      target: llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: start
+        targetType: knowledge-retrieval
+      id: 1772354158297-source-1772356370639-target
+      source: '1772354158297'
+      sourceHandle: source
+      target: '1772356370639'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: http-request
+        targetType: llm
+      id: 1772355357386-source-llm-target
+      source: '1772355357386'
+      sourceHandle: source
+      target: llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        selected: false
+        title: User Input
+        type: start
+        variables: []
+      height: 72
+      id: '1772354158297'
+      position:
+        x: 0
+        y: 277
+      positionAbsolute:
+        x: 0
+        y: 277
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: true
+          variable_selector:
+          - sys
+          - query
+        memory:
+          query_prompt_template: '{{#sys.query#}}
+
+
+            {{#sys.files#}}'
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 10
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: google/gemini-2.5-flash-image-preview:free
+          provider: langgenius/openrouter/openrouter
+        prompt_template:
+        - id: 79016fe1-30ff-4bbc-a447-d5acfc8217c0
+          role: system
+          text: "You are Krishi Sakhi (Farmer's Friend), an expert agricultural decision\
+            \ support assistant for smallholder farmers in India. Your goal is to\
+            \ provide accurate, grounded, and easy-to-understand advice.\n\n## Instructions:\n\
+            1. USE PROVIDED KNOWLEDGE: You will be provided with retrieved facts from\
+            \ an agricultural knowledge base below. You MUST base your answers on\
+            \ this provided context. If the answer is not in the context, clearly\
+            \ state: \"I don't have enough specific information on that, please consult\
+            \ a local expert.\" Do not invent facts.\n2. IMAGE AWARENESS: If an image\
+            \ or document is provided by the user, acknowledge it and analyze it based\
+            \ ONLY on what you can see, then cross-reference your analysis with the\
+            \ knowledge base context.\n3. NO PESTICIDE DOSAGES: NEVER provide specific\
+            \ chemical pesticide or fertilizer dosages or formulations. \n4. NO FINANCIAL\
+            \ ADVICE: NEVER make guaranteed financial predictions or exact market\
+            \ price forecasts. \n5. NO MEDICAL ADVICE: NEVER provide medical advice\
+            \ for humans or farm animals.\n6. AGRICULTURAL SCOPE ONLY: Refuse politely\
+            \ to answer any questions completely outside of agriculture or farming.\n\
+            7. SIMPLE LANGUAGE: Speak clearly, directly addressing the farmer in a\
+            \ helpful, friendly tone. Do not use complex technical jargon.\n\n## Retrieved\
+            \ Agricultural Context:\n{{#context#}}"
+        selected: true
+        title: LLM
+        type: llm
+        vision:
+          configs:
+            detail: high
+            variable_selector:
+            - sys
+            - files
+          enabled: true
+      height: 87
+      id: llm
+      position:
+        x: 1084
+        y: 433
+      positionAbsolute:
+        x: 1084
+        y: 433
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        answer: '{{#llm.text#}}'
+        selected: false
+        title: Answer
+        type: answer
+        variables: []
+      height: 101
+      id: answer
+      position:
+        x: 1425
+        y: 426
+      positionAbsolute:
+        x: 1425
+        y: 426
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        cases:
+        - case_id: 'true'
+          conditions:
+          - comparison_operator: contains
+            id: d8086a38-1a0f-4256-9e85-42ad2859bc53
+            sub_variable_condition:
+              case_id: d5150f9f-339a-481d-b1e9-4885e7865bf3
+              conditions:
+              - comparison_operator: in
+                id: 746f979b-b131-4e4f-9050-9a89081f91ff
+                key: type
+                value:
+                - image
+                varType: string
+              logical_operator: and
+            value: ''
+            varType: array[file]
+            variable_selector:
+            - sys
+            - files
+          id: 'true'
+          logical_operator: and
+        - case_id: fbf740d8-d5a7-4e7e-a759-19006c835939
+          conditions:
+          - comparison_operator: contains
+            id: 2757ab30-9145-4f2f-a347-3c39d38aff61
+            sub_variable_condition:
+              case_id: 1be39a54-790c-4ea9-85ee-254c67bfd281
+              conditions:
+              - comparison_operator: in
+                id: e66b3d50-4354-4528-8a55-ce8e49becabd
+                key: type
+                value:
+                - document
+                varType: string
+              logical_operator: and
+            value: ''
+            varType: array[file]
+            variable_selector:
+            - sys
+            - files
+          logical_operator: and
+        selected: false
+        title: IF/ELSE
+        type: if-else
+      height: 219
+      id: '1772354481403'
+      position:
+        x: 362
+        y: 191
+      positionAbsolute:
+        x: 362
+        y: 191
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        authorization:
+          config: null
+          type: no-auth
+        body:
+          data:
+          - file:
+            - sys
+            - files
+            id: key-value-233
+            type: file
+          type: binary
+        headers: 'Authorization:{{#env.Supabase_Secret_Key#}}
+
+          content-type:image/jpeg'
+        method: post
+        params: ''
+        retry_config:
+          max_retries: 3
+          retry_enabled: true
+          retry_interval: 100
+        selected: false
+        ssl_verify: true
+        timeout:
+          max_connect_timeout: 0
+          max_read_timeout: 0
+          max_write_timeout: 0
+        title: Supabase S3
+        type: http-request
+        url: https://jkmggwdizacanrtosefj.supabase.co/storage/v1/object/soil-images/{{#sys.conversation_id#}}/image.jpg
+        variables: []
+      height: 187
+      id: '1772354691995'
+      position:
+        x: 723
+        y: 0
+      positionAbsolute:
+        x: 723
+        y: 0
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        authorization:
+          config: null
+          type: no-auth
+        body:
+          data:
+          - file:
+            - sys
+            - files
+            id: key-value-469
+            key: file
+            type: file
+            value: ''
+          - id: key-value-495
+            key: data
+            type: text
+            value: '{"indexing_technique": "high_quality", "process_rule": {"mode":
+              "automatic"}}'
+          - id: key-value-515
+            key: ''
+            type: text
+            value: ''
+          type: form-data
+        headers: 'Authorization:Bearer dataset-gNIiDFyuIfGVHitA8jUcmKuX
+
+          Content-Type:multipart/form-data'
+        method: post
+        params: ''
+        retry_config:
+          max_retries: 3
+          retry_enabled: true
+          retry_interval: 100
+        selected: false
+        ssl_verify: true
+        timeout:
+          max_connect_timeout: 0
+          max_read_timeout: 0
+          max_write_timeout: 0
+        title: HTTP Request 2
+        type: http-request
+        url: http://host.docker.internal/v1/datasets/2fe3fd3c-b3b1-449d-837d-a44bf5b9bdf1/document/create_by_file
+        variables: []
+      height: 168
+      id: '1772355357386'
+      position:
+        x: 723
+        y: 267
+      positionAbsolute:
+        x: 723
+        y: 267
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    - data:
+        dataset_ids:
+        - fkLCzkF9kGYluHqM2CgQ+K8izqyHvrJQeOkZVQibIg75TfqOsa3F9GJCR9yPGe+n
+        multiple_retrieval_config:
+          reranking_enable: true
+          reranking_mode: reranking_model
+          reranking_model:
+            model: rerank-english-v3.0
+            provider: langgenius/cohere/cohere
+          top_k: 4
+        query_attachment_selector: []
+        query_variable_selector:
+        - '1772354158297'
+        - sys.query
+        retrieval_mode: multiple
+        selected: false
+        title: Knowledge Retrieval
+        type: knowledge-retrieval
+      height: 89
+      id: '1772356370639'
+      position:
+        x: 362
+        y: 490
+      positionAbsolute:
+        x: 362
+        y: 490
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 241
+    viewport:
+      x: 47.063184599449755
+      y: 203.54443842651506
+      zoom: 0.5144070819687636
+  rag_pipeline_variables: []

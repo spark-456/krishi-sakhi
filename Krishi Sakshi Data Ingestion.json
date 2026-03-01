@@ -1,0 +1,266 @@
+{
+  "name": "Krishi Sakshi Data Ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.cohere.ai/v1/embed",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"texts\": [\n    {{ JSON.stringify($json.text) }}\n  ],\n  \"model\": \"embed-english-v3.0\",\n  \"input_type\": \"search_document\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -448,
+        448
+      ],
+      "id": "505caff7-c4d0-4d5b-ad11-ec889f9af2ee",
+      "name": "Cohere Embedding",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "B7FmFuT8rgjgaGIv",
+          "name": "Cohere"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://host.docker.internal/v1/datasets/2fe3fd3c-b3b1-449d-837d-a44bf5b9bdf1/document/create_by_text",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\nJSON.stringify({\n  \"name\": \"Krishi_Sakhi_\" + $now.setZone('Asia/Kolkata').format('HH:mm:ss'),\n  \"text\": $json.texts[0],\n  \"indexing_technique\": \"high_quality\",\n  \"process_rule\": {\n    \"mode\": \"automatic\"\n  }\n})\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -208,
+        448
+      ],
+      "id": "396873f6-ef81-4fdd-9f51-1f6531c99d74",
+      "name": "Dify Knowledge Base",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "An99eTBByCS09fQq",
+          "name": "Dify Krishi Sakhi KB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://jkmggwdizacanrtosefj.supabase.co/storage/v1/object/soil-images/{{ $execution.id }}/{{ encodeURIComponent($binary.file.fileName) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImprbWdnd2RpemFjYW5ydG9zZWZqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjI3MjUyOSwiZXhwIjoyMDg3ODQ4NTI5fQ.f7CoYJCXJ0RaDZbB1CLhWhMCcw6LZPyL_tCKJ5BtC7o"
+            },
+            {
+              "name": "Content-Type",
+              "value": "={{ $binary.file.mimeType }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "=file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -640,
+        112
+      ],
+      "id": "346a6b20-bb87-4b29-a25f-62f471cd7b0b",
+      "name": "Supabase Storage S3"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $binary.file.mimeType }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "2568e1ee-bb7b-43fd-91a6-f622386eea50"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "ad59eaaa-b057-428d-8d45-7ed200bb8990",
+                    "leftValue": "={{ $binary.file.fileExtension }}",
+                    "rightValue": "pdf",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -1072,
+        272
+      ],
+      "id": "6bc41fc3-0ca9-4e57-89f6-08a98a4c0649",
+      "name": "Switch "
+    },
+    {
+      "parameters": {
+        "formTitle": "Data Upload",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "url"
+            },
+            {
+              "fieldLabel": "file",
+              "fieldType": "file"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        -1296,
+        272
+      ],
+      "id": "56302ae4-c680-41ed-af47-fd45de7ae0ef",
+      "name": "Data Upload",
+      "webhookId": "a433b97a-4f1e-472d-9403-5a5925664a42"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -672,
+        448
+      ],
+      "id": "c6a07962-2f7a-4d0a-b4d2-135496ffad85",
+      "name": "Extract from File1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cohere Embedding": {
+      "main": [
+        [
+          {
+            "node": "Dify Knowledge Base",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dify Knowledge Base": {
+      "main": [
+        []
+      ]
+    },
+    "Supabase Storage S3": {
+      "main": [
+        []
+      ]
+    },
+    "Switch ": {
+      "main": [
+        [
+          {
+            "node": "Supabase Storage S3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract from File1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Upload": {
+      "main": [
+        [
+          {
+            "node": "Switch ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File1": {
+      "main": [
+        [
+          {
+            "node": "Cohere Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "cb908a13-1bcb-417c-a63c-c3ddab8ed5c5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "84180e64dbdcf0661fe360562106824101e9ba95d94e8152ae864aa9f555d1bc"
+  },
+  "id": "N4-srN7sI6DiY70yq-gTt",
+  "tags": []
+}
