@@ -9,7 +9,7 @@
 **Type:** Agricultural Decision Support Platform
 **Target User:** Smallholder farmers in Tamil Nadu and Andhra Pradesh, India
 **Primary Interface:** Progressive Web Application (PWA), mobile-first, installable on Android without Play Store
-**Deployment Model:** Fully self-hosted via Docker Compose, CPU-only, zero cloud operational cost
+**Deployment Model:** Primary models via Cloud API with completely self-hosted local fallback (Docker Compose, CPU-only) for high availability
 **Current Stage:** Research prototype — evaluated, not yet in field trial
 
 **The problem being solved:** India's extension worker-to-farmer ratio has fallen below 1:5,000. The majority of smallholder farmers make high-stakes crop, pest, irrigation, and market decisions without any structured expert guidance. Accessing even nominally available public extension services requires travel, time off the farm, and opportunity cost that makes them practically inaccessible. Krishi Sakhi replaces fragmented, inaccessible advisory with a single grounded AI-assisted interface that works on low-end smartphones under intermittent connectivity.
@@ -35,7 +35,7 @@ The system is composed of three loosely coupled layers. Every agent working on t
   - Knowledge base: curated agricultural documents chunked into 300–500 token segments
   - Embeddings: `nomic-embed-text` via Ollama
   - Retrieval: FAISS vector search with metadata-filtered top-k (filters: region, crop, season, topic category)
-  - LLM: **Llama 3.1 8B** served locally via Ollama — no cloud API dependency, no OpenAI, no Anthropic
+  - LLM: **Cloud LLM API** (e.g., Groq, OpenAI) is the primary model, with local **Llama 3.1 8B** via Ollama acting as a fallback
 - **n8n workflow per request:** receive webhook → inject farmer context → call Dify agent → format response → return to FastAPI
 - **Safety constraints:** the advisory layer has explicit policy guardrails — it will refuse specific pesticide dosages, financial predictions, and non-agricultural advice, and defer to Krishi Vigyan Kendra (KVK) for unsafe queries
 
@@ -113,7 +113,7 @@ This is the exact sequence for a single farmer query. Every agent touching the b
 
 4. n8n forwards to Dify RAG agent:
    └── Dify performs FAISS vector search with metadata filters
-   └── Llama 3.1 8B generates grounded response using retrieved chunks
+   └── Cloud LLM (or local Llama fallback) generates grounded response using retrieved chunks
    └── Safety guardrails evaluated
 
 5. Dify returns response to n8n → n8n returns to FastAPI
@@ -390,7 +390,7 @@ There are exactly two storage buckets. Do not create additional buckets without 
 
 ## 8. Technology Stack Reference
 
-Agents must not substitute or upgrade any of these without explicit instruction. The zero-cost, CPU-only, self-hosted constraint is a hard requirement, not a preference.
+Agents must adhere to this architectural vision. Cloud API LLMs are preferred for speed/quality, while local models act as a critical fallback mechanism to ensure constant availability.
 
 | Component | Technology | Version / Notes |
 |---|---|---|
@@ -404,13 +404,13 @@ Agents must not substitute or upgrade any of these without explicit instruction.
 | RAG agent | Dify Community Edition | Self-hosted via Docker |
 | Vector search | FAISS | Within Dify |
 | Embeddings | nomic-embed-text | Via Ollama |
-| LLM | Llama 3.1 8B | Via Ollama, CPU-only, no cloud |
+| LLM | Cloud APIs & Llama 3.1 8B | Cloud API primary, Ollama local fallback |
 | Voice transcription | Whisper base (74M params) | Local, no cloud |
 | Soil classification | YOLOv8n | Ultralytics, classification mode |
 | Crop recommendation | Random Forest | scikit-learn |
 | Price forecasting | Prophet | Meta/Facebook |
 | Containerisation | Docker Compose | All services |
-| Cloud cost | $0.00 | Hard constraint |
+| Cloud cost | Variable | Free tiers or funded API keys for LLMs |
 
 ---
 
@@ -476,7 +476,7 @@ Agents should be aware of these gaps and not build features that assume they are
 
 These rules apply to any AI agent or automated system processing this document.
 
-1. **Never use a cloud LLM API** (OpenAI, Anthropic, Gemini) as a replacement for Llama 3.1 8B in the advisory pipeline. The zero-cost, privacy-preserving local inference is a core architectural commitment.
+1. **Cloud LLMs are primary, local LLMs are fallbacks.** Always use a cloud LLM API (Groq, OpenAI, Anthropic, Gemini) as the primary inference engine in the advisory pipeline for speed and intelligence. The local self-hosted Llama 3.1 8B is kept strictly as a fallback in case of API outages or quota limits.
 
 2. **Never store farmer voice audio** anywhere — not temporarily in a database column, not as a named file in S3, not in logs. Audio is memory-only, transcribe-and-discard.
 

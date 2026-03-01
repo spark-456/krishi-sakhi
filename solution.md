@@ -90,7 +90,7 @@ sequenceDiagram
     participant OpenMeteo
     participant n8n
     participant Dify
-    participant Llama as Llama 3.1 8B
+    participant LLM as Cloud LLM (with Local Fallback)
 
     Farmer->>PWA: Submit input (text / voice / image)
 
@@ -116,8 +116,8 @@ sequenceDiagram
     FastAPI->>n8n: POST webhook (farmer_input_text + context_block + ml_outputs)
     n8n->>Dify: Forward with structured payload
     Dify->>Dify: FAISS vector search (metadata-filtered: region/crop/season/topic)
-    Dify->>Llama: Generate response with retrieved chunks
-    Llama-->>Dify: Response text
+    Dify->>LLM: Generate response with retrieved chunks
+    LLM-->>Dify: Response text
     Dify->>Dify: Evaluate safety guardrails
     Dify-->>n8n: Formatted response
     n8n-->>FastAPI: Response
@@ -482,8 +482,8 @@ flowchart LR
     FILTER --> FAISS["FAISS top-k vector search\nnomic-embed-text embeddings\n300–500 token chunks"]
     FAISS --> CHUNKS["Retrieved chunks"]
     CHUNKS --> PROMPT["Data-augmented prompt"]
-    PROMPT --> LLAMA["Llama 3.1 8B (Ollama, CPU)"]
-    LLAMA --> SAFETY{"Safety guardrail\nevaluation"}
+    PROMPT --> LLM["Cloud LLM API\n(Fallback: Local Llama 3.1 8B)"]
+    LLM --> SAFETY{"Safety guardrail\nevaluation"}
     SAFETY -->|Safe| RESPONSE["Return response"]
     SAFETY -->|Unsafe| KVK["Defer to KVK\nwas_deferred_to_kvk = true"]
     RESPONSE --> LOG["Log: advisory_messages\ncontext_block_sent + retrieved_chunk_ids"]
@@ -562,7 +562,7 @@ flowchart TD
 | RAG | Agent | Dify Community Edition (Chatbot support) |
 | RAG | Vector search | FAISS |
 | RAG | Embeddings | Generated via n8n / Cloud API |
-| RAG | LLM | Groq / OpenRouter API (Free tier) |
+| RAG | LLM | Cloud API (Primary) / Local Llama (Fallback) |
 | ML | Voice | Whisper base 74M (local) |
 | ML | Soil | YOLOv8n (Ultralytics, classification mode) |
 | ML | Crops | Random Forest (scikit-learn) |
@@ -634,7 +634,7 @@ flowchart TD
 
 ## 16. Agent Behavioural Rules
 
-1. Utilize Groq / OpenRouter free tiers for LLM capabilities to save local computation.
+1. Utilize Cloud LLM APIs (e.g., Groq, OpenAI, Anthropic) as the primary intelligence engine, maintaining local self-hosted LLMs strictly as a highly-available fallback mechanism.
 2. Never store voice audio anywhere — memory-only, transcribe-and-discard.
 3. Never bypass RLS with service role key in application code — service role for migrations/admin only.
 4. Always populate `advisory_messages.context_block_sent` and `retrieved_chunk_ids` on every turn.
