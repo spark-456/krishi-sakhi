@@ -1,6 +1,12 @@
 # 🌾 Krishi Sakhi — *Farmer's Friend*
 
-> An AI-powered Agricultural Decision Support Platform for smallholder farmers in Tamil Nadu & Andhra Pradesh, India.
+> An AI-powered Agricultural Decision Support Platform for smallholder farmers in India.
+
+<p align="center">
+  <img src="frontend/public/screenshots/FarmerRegistrationFlow.png" width="30%" />
+  <img src="frontend/public/screenshots/HomeDashboard.png" width="30%" />
+  <img src="frontend/public/screenshots/MyFarmsAndCropsList.png" width="30%" />
+</p>
 
 ---
 
@@ -286,4 +292,3 @@ The problems are hard. The farmers are resilient. The technology is ready to hel
 ---
 
 *For architecture detail, schema constraints, RLS rules, and agent behavioural rules — see [`solution.md`](./solution.md) and [`context.md`](./context.md).*
-
