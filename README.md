@@ -293,4 +293,4 @@ The problems are hard. The farmers are resilient. The technology is ready to hel
 
 ---
 
-*For architecture detail, schema constraints, RLS rules, and agent behavioural rules — see [`solution.md`](./solution.md) and [`context.md`](./context.md).*
+*For architecture detail, schema constraints, RLS rules, and agent behavioural rules — see [`solution.md`](./docs/solution.md) and [`context.md`](./docs/context.md).*
