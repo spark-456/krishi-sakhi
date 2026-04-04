@@ -1,7 +1,7 @@
 /**
  * AddCropModal — Add Crop to a Farm
  * ──────────────────────────────────
- * MIMIC_DEV: Bottom slide-up modal. Selects from ref_crops.
+ * Bottom slide-up modal. Selects from ref_crops.
  * Auto-logs a 'planting' activity to activity_logs.
  *
  * @param {boolean} isOpen
@@ -68,14 +68,15 @@ const AddCropModal = ({ isOpen, onClose, farmId, farmName, farmerId, onCropAdded
         setIsSubmitting(true);
 
         try {
-            // Insert farm_crops
-            await supabase.from('farm_crops').insert({
+            // Insert crop_record
+            await supabase.from('crop_records').insert({
                 farm_id: farmId,
+                farmer_id: farmerId,
                 crop_name: formData.cropName,
                 season: formData.season,
                 growth_stage: formData.growthStage,
-                planted_date: formData.plantedDate,
-                notes: formData.notes || null,
+                sowing_date: formData.plantedDate,
+                status: 'active',
             });
 
             // Auto-log planting activity

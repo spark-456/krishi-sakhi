@@ -1,7 +1,7 @@
 /**
  * AddActivityModal — Log Farm Activity
  * ─────────────────────────────────────
- * MIMIC_DEV: Bottom slide-up modal for manual activity logging.
+ * Bottom slide-up modal for manual activity logging.
  * Only logs when user explicitly takes action.
  *
  * @param {boolean} isOpen
@@ -63,7 +63,7 @@ const AddActivityModal = ({ isOpen, onClose, farmerId, onActivityAdded }) => {
     };
 
     const fetchCropsForFarm = async (farmId) => {
-        const { data } = await supabase.from('farm_crops').select('*').eq('farm_id', farmId);
+        const { data } = await supabase.from('crop_records').select('*').eq('farm_id', farmId).eq('status', 'active');
         if (data) setCrops(data);
     };
 

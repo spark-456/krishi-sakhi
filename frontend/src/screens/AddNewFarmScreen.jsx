@@ -1,10 +1,8 @@
 /**
- * AddNewFarmScreen — Connected to LocalDB
+ * AddNewFarmScreen — Add Farm to Supabase
  * ────────────────────────────────────────
- * MIMIC_DEV: Writes farm data to localDB.
+ * Writes farm data to Supabase farms table.
  * GPS capture button fills lat/lng.
- *
- * @see localDB.js — farms table
  */
 import React, { useState } from 'react';
 import { ArrowLeft, LocateFixed, Save, Loader2, CheckCircle2, MapPin } from 'lucide-react';

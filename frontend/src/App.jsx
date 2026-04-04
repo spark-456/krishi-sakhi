@@ -1,7 +1,7 @@
 /**
  * App — Root Component & Router
  * ─────────────────────────────
- * MIMIC_DEV: ProtectedLayout wrapper applies consistent pb-20
+ * ProtectedLayout wrapper applies consistent pb-20
  * to all BottomNav routes, preventing text overlap.
  */
 import React from 'react';

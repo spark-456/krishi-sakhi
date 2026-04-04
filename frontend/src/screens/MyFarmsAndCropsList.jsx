@@ -1,7 +1,7 @@
 /**
- * MyFarmsAndCropsList — Farms + Crops from LocalDB
- * ─────────────────────────────────────────────────
- * MIMIC_DEV: Shows farms with planted crops, add crop modal,
+ * MyFarmsAndCropsList — Farms & Crop Records
+ * ────────────────────────────────────────────
+ * Displays farms with active crop_records from Supabase,
  * crop growth stage badges, and farm weather placeholder.
  */
 import React, { useState, useEffect } from 'react';
@@ -51,7 +51,8 @@ const MyFarmsAndCropsList = () => {
                 const cropsMap = {};
                 for (const farm of farmData) {
                     const { data: crops } = await supabase
-                        .from('farm_crops').select('*').eq('farm_id', farm.id)
+                        .from('crop_records').select('*').eq('farm_id', farm.id)
+                        .eq('farmer_id', user.id).eq('status', 'active')
                         .order('created_at', { ascending: false });
                     cropsMap[farm.id] = crops || [];
                 }
@@ -68,7 +69,7 @@ const MyFarmsAndCropsList = () => {
         if (!window.confirm('This will also remove all crops on this farm. Continue?')) return;
         setDeletingId(farmId);
         try {
-            await supabase.from('farm_crops').delete().eq('farm_id', farmId);
+            await supabase.from('crop_records').update({ status: 'abandoned' }).eq('farm_id', farmId).eq('farmer_id', user.id);
             await supabase.from('farms').delete().eq('id', farmId);
             setFarms(prev => prev.filter(f => f.id !== farmId));
             const newCrops = { ...farmCrops };
@@ -86,7 +87,7 @@ const MyFarmsAndCropsList = () => {
     const handleDeleteCrop = async (cropId, farmId) => {
         if (!window.confirm('Remove this crop?')) return;
         try {
-            await supabase.from('farm_crops').delete().eq('id', cropId);
+            await supabase.from('crop_records').update({ status: 'abandoned' }).eq('id', cropId);
             setFarmCrops(prev => ({
                 ...prev,
                 [farmId]: (prev[farmId] || []).filter(c => c.id !== cropId),

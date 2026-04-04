@@ -1,0 +1,23 @@
+version: '3.9'
+services:
+  backend:
+    build: ./backend
+    ports: ["8000:8000"]
+    env_file: ./backend/.env
+    depends_on: []
+
+  soil_classifier:
+    build: ./ml/soil_classifier
+    ports: ["8001:8001"]
+
+  crop_recommender:
+    build: ./ml/crop_recommender
+    ports: ["8002:8002"]
+
+  price_forecaster:
+    build: ./ml/price_forecaster
+    ports: ["8003:8003"]
+
+  transcriber:
+    build: ./ml/transcriber
+    ports: ["8004:8004"]

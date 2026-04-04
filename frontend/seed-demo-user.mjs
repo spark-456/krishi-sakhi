@@ -6,7 +6,7 @@
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = 'https://jkmggwdizacanrtosefj.supabase.co'
-const serviceRoleKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImprbWdnd2RpemFjYW5ydG9zZWZqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjI3MjUyOSwiZXhwIjoyMDg3ODQ4NTI5fQ.f7CoYJCXJ0RaDZbB1CLhWhMCcw6LZPyL_tCKJ5BtC7o'
+const serviceRoleKey = '<SUPABASE_SERVICE_ROLE_KEY>'
 
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false }

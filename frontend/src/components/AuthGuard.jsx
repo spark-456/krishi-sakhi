@@ -1,7 +1,7 @@
 /**
  * AuthGuard — Protects Routes
  * ───────────────────────────
- * MIMIC_DEV: Uses localDB session via useAuth hook.
+ * Uses Supabase session via useAuth hook.
  * Shows branded loading screen while checking.
  * Redirects to / if not authenticated.
  */

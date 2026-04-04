@@ -1,8 +1,8 @@
 /**
  * ProfileScreen — Enhanced User Profile
  * ──────────────────────────────────────
- * MIMIC_DEV: Shows farmer info, farm/crop stats, recent activity,
- * inline edit for name, clear data, logout.
+ * Shows farmer info, farm/crop stats, recent activity,
+ * inline edit for name, and logout.
  */
 import React, { useState, useEffect } from 'react';
 import {
@@ -45,11 +45,11 @@ const ProfileScreen = () => {
                 .from('farms').select('*').eq('farmer_id', user.id);
             if (farmData) setFarms(farmData);
 
-            // Count crops across all farms
-            const { data: allCrops } = await supabase.from('farm_crops').select('*');
-            const farmIds = (farmData || []).map(f => f.id);
-            const farmerCrops = (allCrops || []).filter(c => farmIds.includes(c.farm_id));
-            setCropCount(farmerCrops.length);
+            // Count active crops across all farms
+            const { data: farmerCrops } = await supabase
+                .from('crop_records').select('id')
+                .eq('farmer_id', user.id).eq('status', 'active');
+            setCropCount((farmerCrops || []).length);
 
             // Activity logs
             const { data: logData } = await supabase
@@ -266,7 +266,7 @@ const ProfileScreen = () => {
                             </div>
                             <div>
                                 <p className="text-sm font-semibold text-slate-800">Krishi Sakhi</p>
-                                <p className="text-xs text-slate-500">Version 1.1 — Mimic Dev</p>
+                                <p className="text-xs text-slate-500">Version 1.1</p>
                             </div>
                         </div>
                     </div>

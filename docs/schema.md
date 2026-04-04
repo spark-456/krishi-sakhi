@@ -14,6 +14,7 @@
 | 4 | `crop_records` | Crop Management | Many per farm, one active per farm |
 | 5 | `yield_records` | Crop Management | One per harvested crop_record |
 | 6 | `expense_logs` | Expenses | Many per crop_record |
+| 6b | `activity_logs` | Farm Activity | Many per farm/crop |
 | 7 | `advisory_sessions` | Advisory | Many per farmer |
 | 8 | `advisory_messages` | Advisory | Many per session, grows indefinitely |
 | 9 | `soil_scans` | ML Outputs | One per soil image upload |
@@ -110,6 +111,7 @@ One row per registered user. Created immediately after successful phone OTP veri
 | block | text | | Sub-district administrative unit |
 | village | text | | |
 | onboarding_complete | boolean | NOT NULL, DEFAULT false | False until all onboarding steps completed |
+| phone_number | text | | Tech debt: stored here as a workaround for prototype authentication |
 | created_at | timestamptz | NOT NULL, DEFAULT now() | |
 | updated_at | timestamptz | NOT NULL, DEFAULT now() | |
 
@@ -245,6 +247,35 @@ Line-item expense entries linked to a specific crop record. The FastAPI context 
 - `INSERT`: `auth.uid() = farmer_id`
 - `UPDATE`: `auth.uid() = farmer_id`
 - `DELETE`: `auth.uid() = farmer_id` — farmers may correct erroneous entries
+
+---
+
+### `activity_logs`
+
+General farm tasks and activities logged over time. Enables longitudinal review of interactions with a crop or farm.
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| id | uuid | PK, DEFAULT gen_random_uuid() | |
+| farmer_id | uuid | NOT NULL, FK → farmers.id | |
+| farm_id | uuid | FK → farms.id | Optional farm link |
+| crop_name | text | | |
+| activity_type | text | NOT NULL, CHECK IN ('planting','irrigation','fertilizer','pesticide','weeding','pruning','harvest','soil_test','disease_alert','growth_update','other') | |
+| title | text | NOT NULL | Short description |
+| description | text | | Detailed notes |
+| date | date | NOT NULL, DEFAULT CURRENT_DATE | |
+| created_at | timestamptz | NOT NULL, DEFAULT now() | |
+
+**Indexes:**
+- Primary key on `id`
+- Index on `farmer_id`
+- Index on `farm_id`
+
+**RLS Policies:**
+- `SELECT`: `auth.uid() = farmer_id`
+- `INSERT`: `auth.uid() = farmer_id`
+- `UPDATE`: `auth.uid() = farmer_id`
+- `DELETE`: `auth.uid() = farmer_id`
 
 ---
 
@@ -648,7 +679,8 @@ When initialising a fresh Supabase instance, migrations must be applied in this 
 016_triggers.sql                   -- all triggers defined last
 017_rls_policies.sql               -- all RLS policies defined last
 018_storage_buckets.sql            -- bucket creation and storage RLS
-019_seed_ref_data.sql              -- populate ref_crops, ref_locations
+019_schema_reconciliation.sql      -- schema drift resolution: activity_logs, phone_number, crop_records updates
+020_advisory_session_dify_conv.sql -- phase 2 dify conversation continuity
 ```
 
 ---

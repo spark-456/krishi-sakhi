@@ -27,7 +27,7 @@ workflow:
     selector:
     - env
     - Supabase_Secret_Key
-    value: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImprbWdnd2RpemFjYW5ydG9zZWZqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjI3MjUyOSwiZXhwIjoyMDg3ODQ4NTI5fQ.f7CoYJCXJ0RaDZbB1CLhWhMCcw6LZPyL_tCKJ5BtC7o
+    value: ''
     value_type: string
   features:
     file_upload:

@@ -1,7 +1,7 @@
 /**
  * FarmActivityLogs — DB-Backed Activity Timeline
  * ────────────────────────────────────────────────
- * MIMIC_DEV: Fetches from activity_logs table (starts clean).
+ * Fetches from activity_logs table in Supabase.
  * Only shows logs that were explicitly created by user actions.
  * FAB to add new activity via AddActivityModal.
  */

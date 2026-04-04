@@ -1,85 +1,105 @@
-# Krishi Sakhi — Architecture (Mimic Dev)
+# Krishi Sakhi — Current Architecture
 
-> **MIMIC_DEV**: This is demo-quality code. All patterns marked `MIMIC_DEV:` are designed for easy rework to production Supabase later.
+This document describes the repository as it exists now. It replaces older
+`MIMIC_DEV` assumptions that no longer match the codebase.
 
-## File Structure
+## Current Runtime Topology
 
-```
-frontend/src/
-├── lib/
-│   ├── localDB.js          # localStorage-backed DB (Supabase API shape)
-│   ├── supabaseClient.js    # Proxy: exports localDB as `supabase`
-│   ├── difyClient.js        # Dify Chat API client with farmer context
-│   └── reverseGeocode.js    # Nominatim GPS → state/district/village
-├── hooks/
-│   └── useAuth.js           # Auth hook (localStorage session)
-├── components/
-│   ├── AuthGuard.jsx        # Route protection
-│   ├── BottomNavigation.jsx # Tab bar (5 tabs)
-│   └── ui/Spinner.jsx       # Reusable spinner
-├── screens/
-│   ├── WelcomeScreen.jsx    # /           (public)
-│   ├── PhoneNumberLogin.jsx # /login      (public, phone-based user lookup)
-│   ├── FarmerRegistrationFlow.jsx # /register (auth, 3-step onboarding)
-│   ├── HomeDashboard.jsx    # /dashboard  (auth)
-│   ├── MyFarmsAndCropsList.jsx # /farms   (auth, dynamic from DB)
-│   ├── AddNewFarmScreen.jsx # /add-farm   (auth, writes to DB)
-│   ├── AIAssistantChatScreen.jsx # /assistant (auth, Dify + context)
-│   ├── ProfileScreen.jsx   # /profile    (auth, logout)
-│   ├── FarmActivityLogs.jsx # /activity   (auth)
-│   └── FarmFinanceTracker.jsx # /finance  (auth)
-└── App.jsx                  # Router + AuthGuard wiring
+```text
+React PWA (frontend/)
+  |- Supabase JS client
+  |    |- auth session
+  |    |- farmers / farms / crop_records / expense_logs / activity_logs
+  |
+  |- Dify Chat API client
+       |- sends query + assembled farmer context directly from the browser
+
+FastAPI backend (backend/)
+  |- scaffolded and callable locally
+  |- owns context assembly, Dify proxying, audit writing, weather lookup
+  |- not yet the primary path used by the frontend
+
+Supabase schema SQL
+  |- canonical SQL currently lives in supabase-gen-code/
+  |- supabase/ is present but only contains placeholders
+
+Dify export
+  |- dify/chatflow - krishi sakhi.yml
 ```
 
-## Route Map
+## Connection Map
 
-| Path | Screen | Auth | BottomNav | DB Tables |
-|------|--------|------|-----------|-----------|
-| `/` | WelcomeScreen | No | No | — |
-| `/login` | PhoneNumberLogin | No | No | `farmers` (lookup) |
-| `/register` | FarmerRegistrationFlow | Yes | No | `farmers`, `farms`, `ref_locations` |
-| `/dashboard` | HomeDashboard | Yes | Yes | `farmers`, `farms` |
-| `/farms` | MyFarmsAndCropsList | Yes | Yes | `farms` |
-| `/add-farm` | AddNewFarmScreen | Yes | No | `farms` |
-| `/assistant` | AIAssistantChatScreen | Yes | Yes | `farmers`, `farms` (context) |
-| `/profile` | ProfileScreen | Yes | Yes | `farmers`, `farms` |
-| `/activity` | FarmActivityLogs | Yes | Yes | — |
+| Layer | Current State | Notes |
+|---|---|---|
+| Frontend -> Supabase | Active | Main app data path today |
+| Frontend -> Dify | Active | `frontend/src/lib/difyClient.js` |
+| Frontend -> FastAPI | Partial / not primary | Backend exists but chat is not routed through it yet |
+| FastAPI -> Supabase | Implemented | Uses `supabase-py` clients |
+| FastAPI -> Dify | Implemented | `backend/services/dify_client.py` |
+| FastAPI -> Weather API | Implemented | `backend/services/weather_client.py` |
+| `supabase/` folder -> live schema | Not authoritative | Placeholder layout only |
+| `supabase-gen-code/` -> live schema | Authoritative in repo | SQL source set currently present |
 
-## Data Flow
+## Source Of Truth Order
 
+When files disagree, use this order:
+
+1. Runtime code in `frontend/src/` and `backend/`
+2. Schema contract in `docs/schema.md` plus SQL under `supabase-gen-code/`
+3. High-level architecture in this file and `README.md`
+4. `.agent-local/` status, handoff, and implementation plan files
+
+Do not use external chat logs, external artifacts, or prior agent transcripts as
+source of truth.
+
+## Repository Layout
+
+```text
+.
+|- frontend/            React + Vite PWA, active user-facing app
+|- backend/             FastAPI service scaffold, not yet main request path
+|- dify/                Dify flow export and related AI assets
+|- docs/                Architecture, schema, and product references
+|- ml/                  ML service area
+|- supabase/            Placeholder migration/seed folders
+|- supabase-gen-code/   Current SQL schema and reference data scripts
+|- .agent/              Static role guidance
+|- .agent-local/        Local-only operating memory and handoff state
 ```
-Phone Input → localDB.auth.signInWithPhone(phone)
-  ├── Found in farmers table → sign in as that farmer
-  └── Not found → create new farmer row → go to /register
 
-OnboardingComplete → localDB.from('farmers').update({ onboarding_complete: true })
-                   → localDB.from('farms').insert({ ... })
+## Safe Cleanup Rules
 
-Chat → difyClient.sendMessage(query, convId, userId, farmerContext)
-  └── farmerContext = { name, state, district, village, farms[] }
+Safe to remove without architecture review:
+
+- Generated Vite temp files
+- Build outputs such as `frontend/dist/` and `/.dist/`
+- Local error logs
+- Unused template assets with no references
+
+Do not remove or move without explicit review:
+
+- Anything under `frontend/src/`, `backend/`, `dify/`, `docs/schema.md`
+- SQL files under `supabase-gen-code/`
+- Environment files
+- Root planning docs unless their role is intentionally replaced
+
+## Development Continuity Model
+
+Persistent working memory should live in `.agent-local/` with this shape:
+
+```text
+.agent-local/
+|- context/     system map, repo inventory, cleanup notes
+|- state/       active status and next-session handoff
+|- decisions/   architecture and workflow decisions
+|- logs/        dated change log
+|- plans/       prioritized backlog
+|- templates/   repeatable update templates
 ```
 
-## LocalDB → Supabase Migration
+Rules:
 
-1. Revert `supabaseClient.js` to uncomment real Supabase client
-2. Rework `useAuth.js` to use `onAuthStateChange` from Supabase
-3. Rework `PhoneNumberLogin.jsx` to use real phone OTP
-4. Delete `localDB.js`
-5. That's it — all `.from().select().eq()` calls are already Supabase-compatible
-
-## Environment Variables
-
-| Variable | Purpose |
-|----------|---------|
-| `VITE_SUPABASE_URL` | Supabase project URL (unused in mimic dev) |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key (unused in mimic dev) |
-| `VITE_DIFY_API_URL` | Dify Chat API base URL |
-| `VITE_DIFY_CHATBOT_API_KEY` | Dify API key |
-
-## MIMIC_DEV Markers
-
-Every temporary pattern is marked with `// MIMIC_DEV:` in the source. Search for this string to find all rework points:
-
-```bash
-grep -rn "MIMIC_DEV" frontend/src/
-```
+- Update `.agent-local/state/ACTIVE_STATUS.md` after meaningful repo changes.
+- Update `.agent-local/state/HANDOFF.md` before ending a session.
+- Log decisions instead of hiding them inside chat history.
+- Prefer concise factual notes over speculative plans.

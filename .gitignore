@@ -1,1 +1,31 @@
+# Environment & Secrets
 .env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Build output
+dist/
+build/
+/.dist/
+/frontend/vite.config.js.timestamp-*.mjs
+/frontend/build_error.log
+
+# Agent local memory
+.agent-local/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

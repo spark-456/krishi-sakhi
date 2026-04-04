@@ -1,11 +1,11 @@
 /**
  * Dify Chat API Client — with Farmer Context
  * ────────────────────────────────────────────
- * MIMIC_DEV: Sends farmer profile + farm data to Dify as inputs.
+ * Sends farmer profile + farm data to Dify as inputs.
  * This gives Sakhi DB-level awareness without direct DB access.
  *
  * @module difyClient
- * @see ARCHITECTURE.md §Chat for data flow
+ * @see docs/ARCHITECTURE.md for the current repo-level data flow
  */
 
 const DIFY_API_URL = import.meta.env.VITE_DIFY_API_URL || 'http://localhost/v1'
@@ -31,7 +31,7 @@ export async function sendMessage(query, conversationId = null, userId = 'demo-u
         return FALLBACK_RESPONSE
     }
 
-    // MIMIC_DEV: Build inputs from farmer context for Dify to use
+    // Build inputs from farmer context for Dify to use
     const inputs = {}
     if (farmerContext) {
         inputs.farmer_name = farmerContext.farmer_name || ''

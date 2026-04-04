@@ -1,10 +1,10 @@
 /**
  * HomeDashboard — Main Dashboard
  * ──────────────────────────────
- * MIMIC_DEV: Fetches farmer data from localDB.
+ * Fetches farmer data from Supabase.
  * Shows greeting, weather placeholder, farm overview.
  *
- * @see localDB.js — farmers, farms tables
+ * @see supabaseClient.js — farmers, farms tables
  */
 import React, { useState, useEffect } from 'react';
 import { CloudSun, TrendingUp, Droplets, Leaf, ChevronRight, Loader2, Sprout, MessageSquare, Camera, BookOpen } from 'lucide-react';

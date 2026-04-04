@@ -1,7 +1,7 @@
 /**
  * AIAssistantChatScreen — Ask Sakhi (Enhanced Context)
  * ────────────────────────────────────────────────────
- * MIMIC_DEV: Sends farmer details, crops, and recent activities to Dify.
+ * Sends farmer profile, crops, and recent activities to Dify.
  * Fixed: Input positioned correctly above BottomNav via ProtectedLayout.
  */
 import React, { useState, useRef, useEffect } from 'react';
@@ -57,13 +57,13 @@ const AIAssistantChatScreen = () => {
             const { data: farms } = await supabase
                 .from('farms').select('*').eq('farmer_id', user.id);
 
-            // MIMIC_DEV: Fetch ALL crops across all farms
+            // Fetch active crops across all farms
             const { data: allCrops } = await supabase
-                .from('farm_crops').select('*');
+                .from('crop_records').select('*').eq('farmer_id', user.id).eq('status', 'active');
             const farmerFarmIds = (farms || []).map(f => f.id);
             const farmerCrops = (allCrops || []).filter(c => farmerFarmIds.includes(c.farm_id));
 
-            // MIMIC_DEV: Fetch recent activity logs (last 15)
+            // Fetch recent activity logs (last 15)
             const { data: allLogs } = await supabase
                 .from('activity_logs').select('*').eq('farmer_id', user.id)
                 .order('date', { ascending: false }).limit(15);
