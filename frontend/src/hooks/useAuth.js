@@ -1,33 +1,35 @@
 /**
  * useAuth Hook
- * ────────────
- * Wraps Supabase auth session state. Provides reactive auth status
- * across the app without prop drilling.
+ * ──────────────────────────────────────────────────
+ * Provides session, user, loading status, and auth actions.
  *
- * session === undefined → still loading
- * session === null      → logged out
- * session === object    → logged in
- *
- * @see frontend-engineer.md §4
+ * API:
+ *   const { user, session, isLoading, isAuthenticated, signOut } = useAuth()
  */
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 export function useAuth() {
-    const [session, setSession] = useState(undefined) // undefined = loading
+    const [session, setSession] = useState(null)
+    const [user, setUser] = useState(null)
+    const [isLoading, setIsLoading] = useState(true)
 
     useEffect(() => {
-        // 1. Get current session on mount
+        // Get initial session
         supabase.auth.getSession().then(({ data }) => {
             setSession(data.session)
+            setUser(data.session?.user || null)
+            setIsLoading(false)
         })
 
-        // 2. Listen for auth state changes (sign in, sign out, token refresh)
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
-            setSession(session)
-        })
+        // Listen for auth changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            (event, session) => {
+                setSession(session)
+                setUser(session?.user || null)
+                setIsLoading(false)
+            }
+        )
 
         return () => subscription.unsubscribe()
     }, [])
@@ -35,13 +37,14 @@ export function useAuth() {
     const signOut = async () => {
         await supabase.auth.signOut()
         setSession(null)
+        setUser(null)
     }
 
     return {
         session,
-        user: session?.user ?? null,
-        isLoading: session === undefined,
-        isAuthenticated: Boolean(session),
+        user,
+        isLoading,
+        isAuthenticated: !!user,
         signOut,
     }
 }

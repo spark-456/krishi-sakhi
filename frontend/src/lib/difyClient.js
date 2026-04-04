@@ -1,10 +1,11 @@
 /**
- * Dify Chat API Client
- * ────────────────────
- * Wrapper for Dify Chat Message API (blocking mode).
- * Preserves conversation_id across turns for multi-turn context.
+ * Dify Chat API Client — with Farmer Context
+ * ────────────────────────────────────────────
+ * MIMIC_DEV: Sends farmer profile + farm data to Dify as inputs.
+ * This gives Sakhi DB-level awareness without direct DB access.
  *
- * If Dify is unreachable, returns a fallback response so the UI never crashes.
+ * @module difyClient
+ * @see ARCHITECTURE.md §Chat for data flow
  */
 
 const DIFY_API_URL = import.meta.env.VITE_DIFY_API_URL || 'http://localhost/v1'
@@ -18,25 +19,39 @@ const FALLBACK_RESPONSE = {
 /**
  * Send a message to Dify Chat API.
  *
- * @param {string} query           — The user's message text
- * @param {string|null} conversationId — Dify conversation ID for multi-turn. null = new conversation.
- * @param {string} userId          — Unique user identifier (farmer UUID)
+ * @param {string} query            — User message text
+ * @param {string|null} conversationId — Dify conversation ID for multi-turn. null = new.
+ * @param {string} userId           — Unique user identifier (farmer UUID)
+ * @param {object|null} farmerContext — Farmer profile + farm data to send as inputs
  * @returns {Promise<{ answer: string, conversation_id: string }>}
  */
-export async function sendMessage(query, conversationId = null, userId = 'demo-user') {
+export async function sendMessage(query, conversationId = null, userId = 'demo-user', farmerContext = null) {
     if (!DIFY_API_KEY) {
         console.warn('[difyClient] VITE_DIFY_CHATBOT_API_KEY not set. Returning fallback.')
         return FALLBACK_RESPONSE
     }
 
+    // MIMIC_DEV: Build inputs from farmer context for Dify to use
+    const inputs = {}
+    if (farmerContext) {
+        inputs.farmer_name = farmerContext.farmer_name || ''
+        inputs.farmer_state = farmerContext.state || ''
+        inputs.farmer_district = farmerContext.district || ''
+        inputs.farmer_village = farmerContext.village || ''
+        inputs.farmer_language = farmerContext.language || 'english'
+        inputs.farmer_farms = JSON.stringify(farmerContext.farms || [])
+        // Phase 3: crops and recent activities
+        inputs.farmer_crops = JSON.stringify(farmerContext.crops || [])
+        inputs.farmer_recent_activities = JSON.stringify(farmerContext.recent_activities || [])
+    }
+
     const payload = {
-        inputs: {},
+        inputs,
         query,
         response_mode: 'blocking',
         user: userId,
     }
 
-    // Only include conversation_id if we have one (continuing a conversation)
     if (conversationId) {
         payload.conversation_id = conversationId
     }

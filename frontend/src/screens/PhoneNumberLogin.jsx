@@ -1,14 +1,9 @@
 /**
- * PhoneNumberLogin Screen
- * ───────────────────────
- * Cosmetic phone login UI. Under the hood, all OTP verifications
- * auto-sign-in to the pre-seeded demo user via Supabase email/password.
+ * PhoneNumberLogin — Phone-Based User Lookup
+ * ───────────────────────────────────────────
  *
- * After sign-in, checks farmers.onboarding_complete:
- *   - false → /register
- *   - true  → /dashboard
- *
- * @see frontend-engineer.md §2 — Route: /login, Auth: No
+ * Uses dummy email/password auth behind the scenes so UI remains OTP based
+ * but utilizes real Supabase sessions.
  */
 import React, { useState } from 'react';
 import { Phone, ArrowRight, ShieldCheck, Loader2 } from 'lucide-react';
@@ -37,8 +32,6 @@ const PhoneNumberLogin = () => {
         const newOtp = [...otp];
         newOtp[index] = value.substring(value.length - 1);
         setOtp(newOtp);
-
-        // Move to next input if value is entered
         if (value && index < 5) {
             inputRefs.current[index + 1].focus();
         }
@@ -55,32 +48,42 @@ const PhoneNumberLogin = () => {
         setError('');
 
         try {
-            // FAKE AUTH: Sign in to pre-seeded demo user with email/password
-            const demoEmail = import.meta.env.VITE_DEMO_EMAIL || 'demo@krishisakhi.dev';
-            const demoPassword = import.meta.env.VITE_DEMO_PASSWORD || 'KrishiDemo123!';
+            // Transform phone number into a mock email for Supabase Auth
+            const mockEmail = `${phone}@mock.krishisakhi.com`;
+            const fixedPassword = 'password123456';
 
-            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-                email: demoEmail,
-                password: demoPassword,
+            // 1. Try to sign in first
+            let { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+                email: mockEmail,
+                password: fixedPassword
             });
 
-            if (authError) {
-                console.error('[PhoneNumberLogin] Auth error:', authError.message);
+            // 2. If user doesn't exist (invalid credentials), sign them up
+            if (authError && authError.message.includes('Invalid login credentials')) {
+                const signUpResponse = await supabase.auth.signUp({
+                    email: mockEmail,
+                    password: fixedPassword
+                });
+                authData = signUpResponse.data;
+                authError = signUpResponse.error;
+            }
+
+            if (authError || !authData?.user) {
+                console.error('[PhoneNumberLogin] Auth error:', authError?.message);
                 setError('Unable to sign in. Please try again.');
                 setIsVerifying(false);
                 return;
             }
 
-            // Check if onboarding is complete
+            // Check onboarding status in the farmers table
             const { data: farmerData, error: farmerError } = await supabase
                 .from('farmers')
-                .select('onboarding_complete')
+                .select('onboarding_complete, full_name')
                 .eq('id', authData.user.id)
                 .single();
 
-            if (farmerError) {
-                console.error('[PhoneNumberLogin] Farmer fetch error:', farmerError.message);
-                // If no farmer row yet, go to registration
+            // If farmer doesn't exist in the 'farmers' table, route to register
+            if (farmerError || !farmerData) {
                 navigate('/register', { replace: true });
                 return;
             }
@@ -130,24 +133,22 @@ const PhoneNumberLogin = () => {
 
     return (
         <div className="flex flex-col min-h-screen bg-white font-sans">
-            {/* Hero Illustration */}
+            {/* Hero */}
             <div className="bg-gradient-to-b from-primary/20 to-transparent pt-12 pb-6 px-6 relative rounded-b-[3rem]">
                 <div className="w-full max-w-xs mx-auto aspect-square bg-white shadow-xl rounded-full flex items-center justify-center p-8 relative z-10">
                     <div className="text-8xl">👩🏽‍🌾</div>
-                    {/* Decorative floating elements */}
                     <div className="absolute top-4 right-4 bg-green-100 p-2 rounded-full shadow-sm animate-bounce">🌱</div>
                     <div className="absolute bottom-10 left-0 bg-yellow-100 p-2 rounded-full shadow-sm animate-pulse">☀️</div>
                 </div>
             </div>
 
-            {/* Content Form */}
+            {/* Content */}
             <div className="flex-1 px-6 pt-10 pb-6 flex flex-col max-w-md mx-auto w-full">
                 <div className="mb-8 text-center">
                     <h1 className="text-3xl font-extrabold text-slate-900 mb-2">Welcome to Krishi Sakhi</h1>
                     <p className="text-slate-500 font-medium">Your personalized smart farming companion</p>
                 </div>
 
-                {/* Error Banner */}
                 {error && (
                     <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-medium animate-in fade-in duration-300">
                         {error}
@@ -161,7 +162,7 @@ const PhoneNumberLogin = () => {
                             <div className="relative flex items-center">
                                 <div className="absolute left-0 pl-4 flex items-center pointer-events-none">
                                     <span className="text-slate-500 font-medium">+91</span>
-                                    <div className="h-5 w-px bg-slate-300 mx-3"></div>
+                                    <div className="h-5 w-px bg-slate-300 mx-3" />
                                 </div>
                                 <input
                                     type="tel"
@@ -181,8 +182,7 @@ const PhoneNumberLogin = () => {
                                 disabled={phone.length !== 10}
                                 className="w-full bg-primary text-primary-foreground py-4 rounded-2xl font-bold text-lg shadow-[0_8px_30px_rgb(22,163,74,0.3)] hover:shadow-[0_8px_30px_rgb(22,163,74,0.4)] disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
                             >
-                                Get OTP
-                                <ArrowRight className="w-5 h-5" />
+                                Get OTP <ArrowRight className="w-5 h-5" />
                             </button>
                             <div className="flex items-center justify-center gap-2 text-xs text-slate-500 font-medium">
                                 <ShieldCheck className="w-4 h-4 text-emerald-500" />
@@ -226,10 +226,7 @@ const PhoneNumberLogin = () => {
                                 className="w-full bg-primary text-primary-foreground py-4 rounded-2xl font-bold text-lg shadow-[0_8px_30px_rgb(22,163,74,0.3)] hover:shadow-[0_8px_30px_rgb(22,163,74,0.4)] transition-all flex items-center justify-center gap-2 disabled:opacity-70"
                             >
                                 {isVerifying ? (
-                                    <>
-                                        <Loader2 className="w-5 h-5 animate-spin" />
-                                        Verifying...
-                                    </>
+                                    <><Loader2 className="w-5 h-5 animate-spin" /> Verifying...</>
                                 ) : (
                                     'Verify & Continue'
                                 )}
@@ -238,7 +235,6 @@ const PhoneNumberLogin = () => {
                     </div>
                 )}
 
-                {/* Language Selection Footer */}
                 {!otpSent && renderLanguageButtons()}
             </div>
         </div>
