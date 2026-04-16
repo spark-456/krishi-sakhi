@@ -6,15 +6,17 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Mic, Image as ImageIcon, Sparkles, User, RotateCcw, Loader2 } from 'lucide-react';
-import { sendMessage as difySendMessage } from '../lib/difyClient';
+import { askAdvisory, createAdvisorySession, sendVoiceMessage } from '../lib/backendClient';      
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabaseClient';
+import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 
-const CONVERSATION_KEY = (id) => `ks_chat_conv_${id}`;
+const CONVERSATION_KEY = (id) => `ks_chat_session_${id}`;
 
 const AIAssistantChatScreen = () => {
-    const { user } = useAuth();
+    const { user, session } = useAuth();
     const [farmerContext, setFarmerContext] = useState(null);
+    const { isRecording, audioBlob, startRecording, stopRecording, clearAudio } = useVoiceRecorder();
 
     const [messages, setMessages] = useState([
         {
@@ -27,17 +29,24 @@ const AIAssistantChatScreen = () => {
     ]);
     const [input, setInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
-    const [conversationId, setConversationId] = useState(null);
+    const [sessionId, setSessionId] = useState(null);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
     useEffect(() => {
-        if (user?.id) {
-            const savedConvId = localStorage.getItem(CONVERSATION_KEY(user.id));
-            if (savedConvId) setConversationId(savedConvId);
+        if (user?.id && session?.access_token) {
+            const savedSessionId = localStorage.getItem(CONVERSATION_KEY(user.id));
+            if (savedSessionId) {
+                setSessionId(savedSessionId);
+            } else {
+                createAdvisorySession({ token: session.access_token }).then(res => {
+                    setSessionId(res.session_id);
+                    localStorage.setItem(CONVERSATION_KEY(user.id), res.session_id);
+                }).catch(console.warn);
+            }
             loadFarmerContext();
         }
-    }, [user?.id]);
+    }, [user?.id, session?.access_token]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -46,8 +55,8 @@ const AIAssistantChatScreen = () => {
     useEffect(() => { scrollToBottom(); }, [messages, isTyping]);
 
     /**
-     * Load ALL farmer context: profile, farms, crops, recent activities
-     * This gives Dify comprehensive knowledge about the farmer.
+     * Load farmer context mostly for the UI badge.
+     * The backend ContextAssembler handles the real data payload for the LLM natively!
      */
     const loadFarmerContext = async () => {
         try {
@@ -57,13 +66,11 @@ const AIAssistantChatScreen = () => {
             const { data: farms } = await supabase
                 .from('farms').select('*').eq('farmer_id', user.id);
 
-            // Fetch active crops across all farms
             const { data: allCrops } = await supabase
                 .from('crop_records').select('*').eq('farmer_id', user.id).eq('status', 'active');
             const farmerFarmIds = (farms || []).map(f => f.id);
             const farmerCrops = (allCrops || []).filter(c => farmerFarmIds.includes(c.farm_id));
 
-            // Fetch recent activity logs (last 15)
             const { data: allLogs } = await supabase
                 .from('activity_logs').select('*').eq('farmer_id', user.id)
                 .order('date', { ascending: false }).limit(15);
@@ -71,33 +78,12 @@ const AIAssistantChatScreen = () => {
             if (farmer) {
                 setFarmerContext({
                     farmer_name: farmer.full_name,
-                    phone: farmer.phone_number,
-                    state: farmer.state,
-                    district: farmer.district,
-                    village: farmer.village,
-                    language: farmer.preferred_language,
-                    farms: (farms || []).map(f => ({
-                        name: f.farm_name,
-                        area_acres: f.area_acres,
-                        soil_type: f.soil_type,
-                        irrigation: f.irrigation_type,
-                    })),
-                    crops: farmerCrops.map(c => ({
-                        crop: c.crop_name,
-                        stage: c.growth_stage,
-                        season: c.season,
-                        planted: c.planted_date,
-                    })),
-                    recent_activities: (allLogs || []).map(l => ({
-                        type: l.activity_type,
-                        title: l.title,
-                        crop: l.crop_name,
-                        date: l.date,
-                    })),
+                    crops: farmerCrops.map(c => ({ crop: c.crop_name })),
+                    recent_activities: (allLogs || []),
                 });
             }
         } catch (err) {
-            console.warn('[Chat] Could not load farmer context:', err);
+            console.warn('[Chat UI] Could not load farmer context for badge:', err);
         }
     };
 
@@ -116,37 +102,90 @@ const AIAssistantChatScreen = () => {
         setIsTyping(true);
 
         try {
-            const result = await difySendMessage(
-                text.trim(),
-                conversationId,
-                user?.id || 'anon',
-                farmerContext
-            );
-
-            if (result.conversation_id) {
-                setConversationId(result.conversation_id);
-                if (user?.id) {
-                    localStorage.setItem(CONVERSATION_KEY(user.id), result.conversation_id);
-                }
-            }
+            const result = await askAdvisory({
+                sessionId: sessionId,
+                inputChannel: 'text',
+                farmerInputText: text.trim(),
+                farmId: null, 
+                cropRecordId: null,
+                token: session.access_token
+            });
 
             const aiMsg = {
                 id: crypto.randomUUID(),
                 sender: 'ai',
-                text: result.answer,
+                text: result.response_text,
+                audio_b64: result.audio_b64,
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
-
             setMessages(prev => [...prev, aiMsg]);
         } catch (error) {
-            console.error('[Chat] Error:', error);
+            console.error('[Chat] Backend Error:', error);
             setMessages(prev => [...prev, {
                 id: crypto.randomUUID(),
                 sender: 'ai',
-                text: "I'm sorry, I'm having trouble connecting. Please try again.",
+                text: "I'm sorry, my backend connection (FastAPI) seems unavailable locally. Please check your local server or `.env` file.",
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             }]);
         } finally {
+            setIsTyping(false);
+        }
+    };
+
+    useEffect(() => {
+        if (audioBlob) {
+            handleVoiceSend(audioBlob);
+        }
+    }, [audioBlob]);
+
+    const handleVoiceSend = async (blob) => {
+        setIsTyping(true);
+        const tempMsgId = crypto.randomUUID();
+        setMessages(prev => [...prev, {
+            id: tempMsgId,
+            sender: 'user',
+            text: '🎤 Transcribing...',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }]);
+
+        try {
+            const data = await sendVoiceMessage({
+                audioBlob: blob,
+                farmerId: user.id,
+                conversationId: sessionId,
+                token: session?.access_token
+            });
+
+            // Update user message with text transcript
+            setMessages(prev => prev.map(m => m.id === tempMsgId ? { ...m, text: data.transcription || '🎤 (empty)' } : m));
+
+            if (data.transcription && data.answer) {
+                setMessages(prev => [...prev, {
+                    id: crypto.randomUUID(),
+                    sender: 'ai',
+                    text: data.answer,
+                    audio_b64: data.audio_response_b64,
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                }]);
+            } else if (!data.transcription) {
+                 setMessages(prev => [...prev, {
+                    id: crypto.randomUUID(),
+                    sender: 'ai',
+                    text: "Sorry, the audio transcription service is currently unavailable or the audio was empty. Please try typing your question.",
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                }]);
+            }
+        } catch (error) {
+            console.error('[Voice] Transcription error:', error);
+            setMessages(prev => prev.map(m => m.id === tempMsgId ? { ...m, text: '🎤 (error)' } : m));
+            setMessages(prev => [...prev, {
+                id: crypto.randomUUID(),
+                sender: 'ai',
+                text: "Sorry, the voice service is under maintenance. Please try again later or type your question.",
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            }]);
+        } finally {
+            clearAudio();
             setIsTyping(false);
         }
     };
@@ -159,8 +198,14 @@ const AIAssistantChatScreen = () => {
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             suggestions: ["What crops suit my soil?", "Check weather forecast", "How to improve yield?"]
         }]);
-        setConversationId(null);
-        if (user?.id) localStorage.removeItem(CONVERSATION_KEY(user.id));
+        
+        if (user?.id && session?.access_token) {
+            localStorage.removeItem(`ks_chat_session_${user.id}`);
+            createAdvisorySession({ token: session.access_token }).then(res => {
+                setSessionId(res.session_id);
+                localStorage.setItem(`ks_chat_session_${user.id}`, res.session_id);
+            }).catch(console.warn);
+        }
     };
 
     const handleKeyDown = (e) => {
@@ -226,6 +271,11 @@ const AIAssistantChatScreen = () => {
                                 : 'bg-white border border-slate-100 text-slate-800 rounded-tl-sm'
                                 }`}>
                                 {msg.text}
+                                {msg.sender === 'ai' && msg.audio_b64 && (
+                                    <div className="mt-2">
+                                        <audio controls autoPlay src={`data:audio/mpeg;base64,${msg.audio_b64}`} className="h-8 w-full max-w-[200px]" />
+                                    </div>
+                                )}
                                 <div className={`text-[10px] mt-1.5 opacity-70 font-medium ${msg.sender === 'user' ? 'text-right text-green-100' : 'text-slate-400'}`}>
                                     {msg.time}
                                 </div>
@@ -279,8 +329,12 @@ const AIAssistantChatScreen = () => {
                             className="p-2 bg-primary text-white rounded-full hover:bg-primary/90 transition-colors disabled:opacity-50 flex-shrink-0">
                             <Send className="w-4 h-4" />
                         </button>
+                    ) : isRecording ? (
+                        <button onClick={stopRecording} className="p-2 bg-red-500 text-white rounded-full flex-shrink-0 shadow-sm animate-pulse">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        </button>
                     ) : (
-                        <button className="p-2 bg-slate-200 text-slate-500 rounded-full hover:bg-slate-300 transition-colors flex-shrink-0">
+                        <button onClick={startRecording} disabled={isTyping} className="p-2 bg-slate-200 text-slate-500 rounded-full hover:bg-slate-300 transition-colors flex-shrink-0">
                             <Mic className="w-4 h-4" />
                         </button>
                     )}

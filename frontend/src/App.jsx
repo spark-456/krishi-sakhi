@@ -45,9 +45,7 @@ const App = () => {
           <Route path="/login" element={<PhoneNumberLogin />} />
 
           {/* Registration */}
-          <Route path="/register" element={
-            <AuthGuard><FarmerRegistrationFlow /></AuthGuard>
-          } />
+          <Route path="/register" element={<FarmerRegistrationFlow />} />
 
           {/* Protected + BottomNav */}
           <Route path="/dashboard" element={

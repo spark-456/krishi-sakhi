@@ -10,17 +10,21 @@
  */
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronLeft, Leaf, Shield, CheckCircle2, MapPin, Loader2, AlertCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
 import { reverseGeocode } from '../lib/reverseGeocode';
 
 const FarmerRegistrationFlow = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { user, isLoading: authLoading } = useAuth();
     const [step, setStep] = useState(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
+
+    const phoneFromState = location.state?.phone || '';
+    const isSignup = location.state?.isSignup || false;
 
     const [formData, setFormData] = useState({
         name: '',
@@ -29,7 +33,7 @@ const FarmerRegistrationFlow = () => {
         village: '',
         farmName: '',
         farmSize: '',
-        irrigationType: '',
+        irrigationTypes: [],
     });
 
     const [locationStatus, setLocationStatus] = useState('pending');
@@ -156,22 +160,57 @@ const FarmerRegistrationFlow = () => {
     };
 
     const handleComplete = async () => {
-        if (!user) {
-            setSubmitError('Session expired. Please log in again.');
-            return;
-        }
         setIsSubmitting(true);
         setSubmitError('');
 
         try {
-            // Extract phone number from our dummy email pattern
-            const phoneNumber = user.email ? user.email.split('@')[0] : '';
+            let activeUserId = user?.id;
+            let activeEmail = user?.email;
+
+            // If user isn't logged in, they are a new registration
+            if (!activeUserId) {
+                if (!phoneFromState) {
+                    setSubmitError('Phone number missing. Please start from login.');
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                // 1. Ask FastAPI backend to create the account via Service Role (bypassing limits)
+                let backendHost = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+                if (backendHost.endsWith('/')) backendHost = backendHost.slice(0, -1);
+                
+                const regRes = await fetch(`${backendHost}/api/v1/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: phoneFromState, password: 'password123456' })
+                });
+
+                if (!regRes.ok) {
+                    const errObj = await regRes.json().catch(() => ({}));
+                    throw new Error(errObj.detail || 'Failed to create user on backend');
+                }
+
+                // 2. Actually sign them in locally to obtain a JWT Session
+                const { data: authData, error: signInErr } = await supabase.auth.signInWithPassword({
+                    email: `${phoneFromState}@ks.com`,
+                    password: 'password123456'
+                });
+
+                if (signInErr || !authData?.user) {
+                    throw new Error(`Auto-login failed: ${signInErr?.message}`);
+                }
+
+                activeUserId = authData.user.id;
+                activeEmail = authData.user.email;
+            }
+            
+            const phoneNumber = activeEmail ? activeEmail.split('@')[0] : phoneFromState;
             
             // Insert or update farmer profile
             const { error: updateError } = await supabase
                 .from('farmers')
                 .upsert({
-                    id: user.id,
+                    id: activeUserId,
                     full_name: formData.name || 'Farmer',
                     phone_number: phoneNumber,
                     state: formData.state,
@@ -190,10 +229,10 @@ const FarmerRegistrationFlow = () => {
             // Insert farm if farm details provided
             if (formData.farmName || formData.farmSize) {
                 await supabase.from('farms').insert({
-                    farmer_id: user.id,
+                    farmer_id: activeUserId,
                     farm_name: formData.farmName || 'My Farm',
                     area_acres: formData.farmSize ? parseFloat(formData.farmSize) : null,
-                    irrigation_type: formData.irrigationType || null,
+                    irrigation_type: formData.irrigationTypes.length > 0 ? formData.irrigationTypes : null,
                     latitude: coordinates.lat,
                     longitude: coordinates.lng,
                 });
@@ -202,7 +241,7 @@ const FarmerRegistrationFlow = () => {
             navigate('/dashboard', { replace: true });
         } catch (err) {
             console.error('[Registration] Unexpected error:', err);
-            setSubmitError('Something went wrong. Please try again.');
+            setSubmitError(`Something went wrong: ${err.message || err}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -217,7 +256,7 @@ const FarmerRegistrationFlow = () => {
         }
     };
 
-    if (authLoading) {
+    if (authLoading && !isSignup) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-4">
                 <div className="w-12 h-12 border-4 border-slate-200 border-t-primary rounded-full animate-spin" />
@@ -393,7 +432,7 @@ const FarmerRegistrationFlow = () => {
                             </div>
 
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium text-slate-700">Irrigation Type</label>
+                                <label className="text-sm font-medium text-slate-700">Irrigation Type (Select multiple)</label>
                                 <div className="grid grid-cols-2 gap-3 mt-2">
                                     {[
                                         { value: 'rainfed', label: '🌧️ Rainfed' },
@@ -401,12 +440,26 @@ const FarmerRegistrationFlow = () => {
                                         { value: 'borewell', label: '💧 Borewell' },
                                         { value: 'drip', label: '💦 Drip' },
                                         { value: 'other', label: '🔧 Other' },
-                                    ].map(opt => (
-                                        <button key={opt.value} type="button" onClick={() => setFormData({ ...formData, irrigationType: opt.value })}
-                                            className={`flex items-center p-3 border rounded-xl transition-all text-sm font-medium ${formData.irrigationType === opt.value ? 'border-primary bg-primary/5 text-primary ring-2 ring-primary/20' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
-                                            {opt.label}
-                                        </button>
-                                    ))}
+                                    ].map(opt => {
+                                        const isSelected = formData.irrigationTypes.includes(opt.value);
+                                        return (
+                                            <button 
+                                                key={opt.value} 
+                                                type="button" 
+                                                onClick={() => {
+                                                    setFormData(prev => {
+                                                        const newArr = isSelected 
+                                                            ? prev.irrigationTypes.filter(i => i !== opt.value)
+                                                            : [...prev.irrigationTypes, opt.value];
+                                                        return { ...prev, irrigationTypes: newArr };
+                                                    });
+                                                }}
+                                                className={`flex items-center p-3 border rounded-xl transition-all text-sm font-medium ${isSelected ? 'border-primary bg-primary/5 text-primary ring-2 ring-primary/20' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>

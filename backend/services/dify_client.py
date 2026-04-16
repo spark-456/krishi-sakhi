@@ -34,7 +34,7 @@ async def ask_dify(farmer_input_text: str, context: dict) -> dict:
             }
         except Exception as e:
             return {
-                "answer": f"Error calling advisory service: {str(e)}",
+                "answer": "Sorry, unable to connect to the servers. Thank you for your understanding",
                 "was_deferred_to_kvk": False,
                 "conversation_id": "error-conv-id"
             }

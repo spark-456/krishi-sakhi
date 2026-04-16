@@ -49,7 +49,7 @@ const PhoneNumberLogin = () => {
 
         try {
             // Transform phone number into a mock email for Supabase Auth
-            const mockEmail = `${phone}@mock.krishisakhi.com`;
+            const mockEmail = `${phone}@ks.com`;
             const fixedPassword = 'password123456';
 
             // 1. Try to sign in first
@@ -58,19 +58,20 @@ const PhoneNumberLogin = () => {
                 password: fixedPassword
             });
 
-            // 2. If user doesn't exist (invalid credentials), sign them up
+            // 2. If user doesn't exist (invalid credentials), redirect to register
             if (authError && authError.message.includes('Invalid login credentials')) {
-                const signUpResponse = await supabase.auth.signUp({
-                    email: mockEmail,
-                    password: fixedPassword
-                });
-                authData = signUpResponse.data;
-                authError = signUpResponse.error;
+                setIsVerifying(false);
+                navigate('/register', { state: { phone, isSignup: true } });
+                return;
             }
 
             if (authError || !authData?.user) {
                 console.error('[PhoneNumberLogin] Auth error:', authError?.message);
-                setError('Unable to sign in. Please try again.');
+                if (authError?.message?.includes('Signups not allowed')) {
+                    setError('Signups are disabled in Supabase! Please enable them in Authentication settings.');
+                } else {
+                    setError(`Unable to sign in: ${authError?.message || 'Unknown error'}`);
+                }
                 setIsVerifying(false);
                 return;
             }

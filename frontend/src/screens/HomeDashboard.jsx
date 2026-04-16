@@ -7,7 +7,7 @@
  * @see supabaseClient.js — farmers, farms tables
  */
 import React, { useState, useEffect } from 'react';
-import { CloudSun, TrendingUp, Droplets, Leaf, ChevronRight, Loader2, Sprout, MessageSquare, Camera, BookOpen } from 'lucide-react';
+import { IndianRupee, CloudSun, TrendingUp, Droplets, Leaf, ChevronRight, Loader2, Sprout, MessageSquare, Camera, BookOpen } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
@@ -158,15 +158,15 @@ const HomeDashboard = () => {
                                 <p className="text-[10px] text-slate-500">Disease check</p>
                             </div>
                         </Link>
-                        <Link to="/farms" className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl hover:bg-amber-100 transition-colors">
-                            <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
-                                <Leaf className="w-5 h-5 text-amber-600" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-semibold text-slate-800">My Farms</p>
-                                <p className="text-[10px] text-slate-500">Manage crops</p>
-                            </div>
-                        </Link>
+                        <Link to="/finance" className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl hover:bg-amber-100 transition-colors">
+    <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+        <IndianRupee className="w-5 h-5 text-amber-600" />
+    </div>
+    <div>
+        <p className="text-sm font-semibold text-slate-800">Finance</p>
+        <p className="text-[10px] text-slate-500">Track Money</p>
+    </div>
+</Link>
                         <Link to="/activity" className="flex items-center gap-3 p-3 bg-purple-50 rounded-xl hover:bg-purple-100 transition-colors">
                             <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
                                 <BookOpen className="w-5 h-5 text-purple-600" />

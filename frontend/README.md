@@ -24,9 +24,8 @@ VITE_DIFY_CHATBOT_API_KEY=...
 
 ## Current Integration Reality
 
-- The frontend currently talks directly to Supabase for app data.
-- The chat screen currently talks directly to Dify from the browser.
-- A FastAPI backend exists in `../backend`, but it is not yet the primary path for chat traffic.
+- The frontend talks exclusively to the FastAPI backend located in `../backend`.
+- The FastAPI backend handles all interactions with Supabase (DB/Auth) and Dify (Chat).
 
 ## Important Files
 

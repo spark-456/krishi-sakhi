@@ -79,10 +79,10 @@ Each ML module is deployed as an independent FastAPI microservice. They are call
 - **Output:** 7–14 day directional signal (UP / DOWN / STABLE) + MAPE
 - **Storage:** Request and result written to `price_forecast_requests` table
 
-### 3.5 Voice Transcription
-- **Model:** Whisper base (74M parameters), served locally
+### 3.5 Voice Transcription and Synthesis
+- **Models:** Groq whisper-large-v3-turbo (Cloud STT), Google Text-to-Speech (gTTS)
 - **Input:** Audio blob from browser MediaRecorder API
-- **Output:** Transcribed text string + confidence score
+- **Output:** Transcribed text string, returned with Base64 audio response
 - **Storage:** Audio file is NEVER persisted. Processed in memory, discarded immediately after transcription. Transcription text stored in `advisory_messages.farmer_input_text`
 
 ---
@@ -94,7 +94,7 @@ This is the exact sequence for a single farmer query. Every agent touching the b
 ```
 1. Farmer submits input via PWA
    └── Text → enters pipeline directly
-   └── Voice → sent to Whisper microservice → transcribed → audio discarded → text enters pipeline
+   └── Voice → sent to Groq STT → transcribed → audio discarded → text enters pipeline → LLM processes → gTTS converts response to audio
    └── Image → sent to relevant ML microservice (soil or pest) → result appended to context
 
 2. FastAPI assembles farmer context block:
@@ -403,7 +403,8 @@ Agents must adhere to this architectural vision. Cloud API LLMs are preferred fo
 | Vector search | FAISS | Within Dify |
 | Embeddings | nomic-embed-text | Via Ollama |
 | LLM | Cloud APIs & Llama 3.1 8B | Cloud API primary, Ollama local fallback |
-| Voice transcription | Whisper base (74M params) | Local, no cloud |
+| Voice transcription | Groq whisper-large-v3-turbo | Cloud STT |
+| Voice synthesis | Google Text-to-Speech (gTTS) | Python library |
 | Soil classification | YOLOv8n | Ultralytics, classification mode |
 | Crop recommendation | Random Forest | scikit-learn |
 | Price forecasting | Prophet | Meta/Facebook |
@@ -516,7 +517,7 @@ These rules apply to any AI agent or automated system processing this document.
 │   ├── soil_classifier/   # YOLOv8n FastAPI service
 │   ├── crop_recommender/  # Random Forest FastAPI service
 │   ├── price_forecaster/  # Prophet FastAPI service
-│   └── transcriber/       # Whisper FastAPI service
+│   └── transcriber/       # Groq/gTTS FastAPI service
 │
 ├── dify/                  # Dify config, chatflow exports, knowledge base ingestion scripts
 ├── supabase/

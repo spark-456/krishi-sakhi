@@ -431,13 +431,15 @@ graph TD
         P_IN --> P_MODEL --> P_OUT --> P_STORE
     end
 
-    subgraph WHISPER_SVC["Voice Transcriber"]
-        W_IN["Input: audio blob (MediaRecorder)"]
-        W_MODEL["Whisper base 74M (local)"]
-        W_OUT["Output: transcribed text + confidence"]
-        W_DISCARD["Audio NEVER stored — discarded in memory"]
-        W_IN --> W_MODEL --> W_OUT
-        W_MODEL --> W_DISCARD
+    subgraph VOICE_SVC["Voice Transcriber & Synthesizer"]
+        V_IN["Input: audio blob (MediaRecorder)"]
+        V_STT["Groq whisper-large-v3-turbo (Cloud)"]
+        V_TTS["Google Text-to-Speech (gTTS)"]
+        V_OUT["Output: transcribed text & Base64 audio"]
+        V_DISCARD["Audio NEVER stored — discarded in memory"]
+        V_IN --> V_STT --> V_OUT
+        V_TTS --> V_OUT
+        V_STT --> V_DISCARD
     end
 
     subgraph SEASON_SVC["Season Detector"]
@@ -556,7 +558,8 @@ flowchart TD
 | RAG | Vector search | FAISS |
 | RAG | Embeddings | nomic-embed-text via Ollama |
 | RAG | LLM | Cloud API (Primary) / Local Llama (Fallback) |
-| ML | Voice | Whisper base 74M (local) |
+| ML | Voice STT | Groq whisper-large-v3-turbo (Cloud) |
+| ML | Voice TTS | Google Text-to-Speech (gTTS) |
 | ML | Soil | YOLOv8n (Ultralytics, classification mode) |
 | ML | Crops | Random Forest (scikit-learn) |
 | ML | Prices | Prophet (Meta/Facebook) |

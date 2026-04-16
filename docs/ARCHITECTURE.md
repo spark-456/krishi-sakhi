@@ -7,17 +7,13 @@ This document describes the repository as it exists now. It replaces older
 
 ```text
 React PWA (frontend/)
-  |- Supabase JS client
-  |    |- auth session
-  |    |- farmers / farms / crop_records / expense_logs / activity_logs
-  |
-  |- Dify Chat API client
-       |- sends query + assembled farmer context directly from the browser
+  |- Supabase JS client (used for Auth, primarily)
+  |- Backend API client
+       |- forwards queries + context via FastAPI backend
 
 FastAPI backend (backend/)
-  |- scaffolded and callable locally
-  |- owns context assembly, Dify proxying, audit writing, weather lookup
-  |- not yet the primary path used by the frontend
+  |- Active primary path
+  |- owns context assembly, Dify proxying, audit writing, ML dispatch, weather lookup
 
 Supabase schema SQL
   |- canonical SQL currently lives in supabase-gen-code/
@@ -31,9 +27,9 @@ Dify export
 
 | Layer | Current State | Notes |
 |---|---|---|
-| Frontend -> Supabase | Active | Main app data path today |
-| Frontend -> Dify | Active | `frontend/src/lib/difyClient.js` |
-| Frontend -> FastAPI | Partial / not primary | Backend exists but chat is not routed through it yet |
+| Frontend -> Supabase | Limited | Used primarily for Auth session|
+| Frontend -> Dify | Deprecated | Replaced by FastAPI proxy |
+| Frontend -> FastAPI | Active Primary | All feature traffic goes through backend |
 | FastAPI -> Supabase | Implemented | Uses `supabase-py` clients |
 | FastAPI -> Dify | Implemented | `backend/services/dify_client.py` |
 | FastAPI -> Weather API | Implemented | `backend/services/weather_client.py` |

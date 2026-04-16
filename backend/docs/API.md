@@ -13,6 +13,16 @@ All endpoints (except `/health`) require a valid Supabase JWT sent in the `Autho
 - `GET /health`
   Check backend status.
 
+### Advisory & Voice
+- `POST /advisory/sessions`
+  Create a new advisory session.
+- `PATCH /advisory/sessions/{session_id}`
+  End an advisory session.
+- `POST /advisory/ask`
+  Submit a text question. Triggers context assembly, Dify RAG, and returns TTS audio payload.
+- `POST /advisory/voice-chat`
+  Submit a voice question (UploadFile). Returns STT transcription, text response, and TTS audio payload.
+
 ### Farms
 - `GET /farms`
   List all farms for the authenticated farmer.

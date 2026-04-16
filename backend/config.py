@@ -15,7 +15,12 @@ class Settings(BaseSettings):
     ml_timeout_seconds: int = 5
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:4173"]
 
+    elevenlabs_api_key: str = ""
+    groq_api_key: str = ""
+    elevenlabs_voice_id: str = "EXAVITQu4vr4xnSDxMaL"
+
     class Config:
-        env_file = ".env"
+        env_file = [".env", "../.env"]
+        extra = "ignore"
 
 settings = Settings()
