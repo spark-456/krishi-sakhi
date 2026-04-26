@@ -10,6 +10,7 @@ import {
     CheckCircle2, Clock, Loader2, Send
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { shouldRefresh, subscribeToDataRefresh } from '../lib/appEvents';
 
 const API = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
@@ -44,6 +45,15 @@ const CoopGroupDetail = () => {
     const [sending, setSending]   = useState(false);
 
     useEffect(() => { if (token && groupId) fetchAll(); }, [token, groupId, tab]);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToDataRefresh((targets) => {
+            if (shouldRefresh(targets, ['community']) && token && groupId) {
+                fetchAll();
+            }
+        });
+        return unsubscribe;
+    }, [token, groupId, tab]);
 
     const get = (path) => fetch(`${API}/api/v1/cooperative/groups/${groupId}${path}`, { headers }).then(r => r.ok ? r.json() : []);
 
@@ -136,7 +146,7 @@ const CoopGroupDetail = () => {
                         {/* Resources */}
                         {tab === 'resources' && (
                             <div className="space-y-2 mt-2">
-                                <Link to={`/community/groups/${groupId}/add-resource`}
+                                <Link to={`/community/add-resource?groupId=${groupId}`}
                                     className="flex items-center gap-2 justify-center p-3 bg-white border-2 border-dashed border-slate-200 rounded-2xl text-sm text-slate-500 hover:bg-slate-50 transition-colors">
                                     <Plus className="w-4 h-4" /> Share a resource
                                 </Link>
@@ -162,7 +172,7 @@ const CoopGroupDetail = () => {
                         {/* Help Board */}
                         {tab === 'help' && (
                             <div className="space-y-2 mt-2">
-                                <Link to={`/community/groups/${groupId}/help-request`}
+                                <Link to={`/community/create-help?groupId=${groupId}`}
                                     className="flex items-center gap-2 justify-center p-3 bg-orange-50 border-2 border-dashed border-orange-200 rounded-2xl text-sm text-orange-600 font-semibold hover:bg-orange-100 transition-colors">
                                     <Plus className="w-4 h-4" /> Post a help request
                                 </Link>
@@ -192,6 +202,10 @@ const CoopGroupDetail = () => {
                         {/* Routes */}
                         {tab === 'routes' && (
                             <div className="space-y-2 mt-2">
+                                <Link to={`/community/add-route?groupId=${groupId}`}
+                                    className="flex items-center gap-2 justify-center p-3 bg-white border-2 border-dashed border-slate-200 rounded-2xl text-sm text-slate-500 hover:bg-slate-50 transition-colors">
+                                    <Plus className="w-4 h-4" /> Share a route
+                                </Link>
                                 {routes.map((r) => (
                                     <div key={r.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                                         <p className="font-semibold text-sm text-slate-800">{r.route_name}</p>

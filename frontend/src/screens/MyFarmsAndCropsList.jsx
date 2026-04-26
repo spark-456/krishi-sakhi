@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
 import AddCropModal from '../components/AddCropModal';
+import { shouldRefresh, subscribeToDataRefresh } from '../lib/appEvents';
 
 const STAGE_COLORS = {
     land_prep: 'bg-slate-100 text-slate-600',
@@ -36,6 +37,15 @@ const MyFarmsAndCropsList = () => {
 
     useEffect(() => {
         if (user?.id) fetchAll();
+    }, [user?.id]);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToDataRefresh((targets) => {
+            if (shouldRefresh(targets, ['farms', 'dashboard', 'activity']) && user?.id) {
+                fetchAll();
+            }
+        });
+        return unsubscribe;
     }, [user?.id]);
 
     const fetchAll = async () => {

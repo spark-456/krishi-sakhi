@@ -9,6 +9,8 @@ from uuid import UUID
 from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime
+from services.notifications import create_notification
+from services.demo_blog_posts import build_demo_blog_payloads
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -36,6 +38,7 @@ class BlogPostUpdate(BaseModel):
     target_district: Optional[str] = None
     target_state: Optional[str] = None
     cover_image_url: Optional[str] = None
+    is_published: Optional[bool] = None
 
 class TicketUpdate(BaseModel):
     status: Optional[str] = None
@@ -209,6 +212,28 @@ async def update_ticket(
     if "status" in update_data and update_data["status"] in ("resolved", "closed"):
         update_data["resolved_at"] = datetime.utcnow().isoformat()
     res = db.table("farmer_tickets").update(update_data).eq("id", ticket_id).execute()
+    if res.data:
+        ticket = res.data[0]
+        messages = []
+        if body.assigned_admin_id:
+            messages.append("Your ticket has been assigned to an admin.")
+        if body.status == "resolved":
+            messages.append("Your support ticket has been marked as resolved.")
+        elif body.status == "closed":
+            messages.append("Your support ticket has been closed.")
+        elif body.status == "waiting_farmer":
+            messages.append("The admin is waiting for your response on the support ticket.")
+
+        for message in messages:
+            create_notification(
+                db,
+                farmer_id=ticket["farmer_id"],
+                title="Ticket update",
+                message=message,
+                notification_type="ticket",
+                action_url=f"/tickets/{ticket_id}",
+                metadata={"ticket_id": ticket_id, "status": ticket.get("status")},
+            )
     return res.data[0] if res.data else {}
 
 
@@ -227,6 +252,17 @@ async def admin_reply_to_ticket(
     }).execute()
     # Auto-update ticket status to in_progress if open
     db.table("farmer_tickets").update({"status": "in_progress"}).eq("id", ticket_id).eq("status", "open").execute()
+    ticket = db.table("farmer_tickets").select("farmer_id, subject").eq("id", ticket_id).single().execute()
+    if ticket.data:
+        create_notification(
+            db,
+            farmer_id=ticket.data["farmer_id"],
+            title="New reply on your support ticket",
+            message=ticket.data.get("subject", "An admin replied to your ticket."),
+            notification_type="ticket",
+            action_url=f"/tickets/{ticket_id}",
+            metadata={"ticket_id": ticket_id},
+        )
     return res.data[0] if res.data else {}
 
 
@@ -257,6 +293,37 @@ async def create_blog_post(
     data["author_id"] = str(admin_id)
     res = db.table("blog_posts").insert(data).execute()
     return res.data[0] if res.data else {}
+
+
+@router.post("/blog/seed-demo")
+async def seed_demo_blog_posts(
+    replace_existing: bool = False,
+    admin_id: UUID = Depends(require_admin),
+    db: Client = Depends(get_supabase),
+):
+    created = 0
+    updated = 0
+    skipped = 0
+
+    for payload in build_demo_blog_payloads(str(admin_id)):
+        existing = db.table("blog_posts").select("id").eq("title", payload["title"]).limit(1).execute()
+        if existing.data:
+            if replace_existing:
+                db.table("blog_posts").update(payload).eq("id", existing.data[0]["id"]).execute()
+                updated += 1
+            else:
+                skipped += 1
+            continue
+
+        res = db.table("blog_posts").insert(payload).execute()
+        if res.data:
+            created += 1
+
+    return {
+        "created": created,
+        "updated": updated,
+        "skipped": skipped,
+    }
 
 
 @router.get("/blog/{post_id}")

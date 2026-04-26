@@ -35,6 +35,8 @@ DIFY_API_KEY=app-xxx
 GROQ_API_KEY=gsk_xxx
 ```
 
+Keep real values only in local `.env` files. Do not commit service-role keys, API keys, or Git credentials into tracked files.
+
 The backend also reads from a root-level `.env` if present.
 
 ### Frontend
@@ -115,6 +117,8 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - Swagger docs: **http://localhost:8000/docs**
 - Health check: **http://localhost:8000/health**
 
+If you are enabling the notifications feed and proactive nudges on a fresh database, apply the latest Supabase migration set before launching the backend.
+
 ---
 
 ## 💻 Step 4: Start the Frontend
@@ -150,7 +154,7 @@ npm run dev
 ### Advisory & Voice
 - `POST /api/v1/advisory/sessions` — Create advisory session
 - `PATCH /api/v1/advisory/sessions/{session_id}` — End session
-- `POST /api/v1/advisory/ask` — Submit text question (triggers context assembly + Dify RAG + TTS audio)
+- `POST /api/v1/advisory/ask` — Submit text question (can also execute AskSakhi actions like farm/crop creation, expense logs, tickets, and help requests)
 - `POST /api/v1/advisory/voice-chat` — Submit voice question (audio → STT → Dify → TTS)
 
 ### Farms
@@ -188,6 +192,12 @@ npm run dev
 ### Weather
 - `GET /api/v1/weather` — Get live weather for farmer's district
 
+### Notifications
+- `GET /api/v1/notifications` — List notification feed + unread count
+- `PATCH /api/v1/notifications/{notification_id}` — Mark one notification read/unread
+- `POST /api/v1/notifications/mark-all-read` — Mark all notifications as read
+- `POST /api/v1/notifications/generate-nudges` — Admin-only manual nudge generation trigger
+
 ### Auth
 - `POST /api/v1/auth/register` — Register new user (creates Supabase auth + farmer row)
 
@@ -197,6 +207,7 @@ npm run dev
 - `GET /api/v1/admin/network-graph` — D3 network graph data mapping all connections
 - `GET /api/v1/admin/tickets` — Manage farmer tickets
 - `GET/POST /api/v1/admin/blog` — Manage KVK blog posts
+- `POST /api/v1/admin/blog/seed-demo` — Seed representative published blog posts for demo/admin review
 
 ### Cooperative (SakhiNet)
 - `GET/POST /api/v1/cooperative/groups` — Find or create cooperative groups
@@ -242,3 +253,36 @@ To test the application natively on your phone using your laptop's camera and vo
 5. **Dify Not Responding:** Check that Dify is running and `DIFY_API_URL` + `DIFY_API_KEY` are correct. The backend falls back to Groq direct LLM call if Dify fails.
 6. **CORS Errors:** Ensure your frontend URL (including the IP address if testing via mobile) is included in the CORS settings.
 7. **Camera/Microphone Blocked on Mobile:** Browsers block `getUserMedia()` on non-HTTPS origins except `localhost`. Ensure you are using `https://` with the LAN IP.
+## 🚀 Demo Access
+
+For quick demonstration and testing, use the following pre-configured accounts.
+
+### 📱 Demo Farmer Account
+*   **Phone:** `+919999999999`
+*   **OTP:** `123456`
+*   **Purpose:** Explore the app from a farmer's perspective (Dashboard, Farms, SakhiNet, etc.).
+
+### 🛡️ Demo Admin Account
+*   **Phone:** `+918888888888`
+*   **OTP:** `123456`
+*   **Portal URL:** After logging in with the admin phone number, navigate to `https://[IP_OR_LOCALHOST]:5173/admin`
+*   **Purpose:** Access the Admin Dashboard, view the Farmer Network Graph, manage tickets, and publish blog posts.
+
+---
+
+### 📊 Seeding Demo Data
+If you need to re-populate the database with ~200 realistic Telangana-based farmers and community data:
+```bash
+python backend/scripts/populate_demo_data.py
+```
+*Note: Ensure your `SUPABASE_SERVICE_ROLE_KEY` is set in the root `.env` file before running.*
+
+To seed representative admin blog posts from the CLI:
+```bash
+python backend/scripts/seed_demo_blogs.py
+```
+
+To manually generate proactive notification nudges:
+```bash
+python backend/scripts/run_notification_nudges.py
+```

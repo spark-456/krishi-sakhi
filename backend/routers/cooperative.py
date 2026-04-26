@@ -10,6 +10,7 @@ from uuid import UUID
 from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime, timedelta
+from services.notifications import create_notification, create_notifications_for_group_members
 
 router = APIRouter(prefix="/cooperative", tags=["Cooperative"])
 
@@ -281,6 +282,18 @@ async def create_help_request(
     if body.expires_in_days:
         data["expires_at"] = (datetime.utcnow() + timedelta(days=body.expires_in_days)).isoformat()
     res = db.table("help_requests").insert(data).execute()
+    if res.data:
+        help_request = res.data[0]
+        create_notifications_for_group_members(
+            db,
+            group_id=group_id,
+            exclude_farmer_id=str(farmer_id),
+            title="New SakhiNet help request",
+            message=help_request.get("title", "A member posted a help request."),
+            notification_type="community",
+            action_url=f"/community/groups/{group_id}",
+            metadata={"request_id": help_request["id"], "group_id": group_id},
+        )
     return res.data[0] if res.data else {}
 
 
@@ -323,11 +336,22 @@ async def add_response(
     db: Client = Depends(get_supabase),
 ):
     _assert_member(db, group_id, str(farmer_id))
+    request_detail = db.table("help_requests").select("farmer_id, title").eq("id", request_id).single().execute()
     res = db.table("help_request_responses").insert({
         "request_id": request_id,
         "farmer_id": str(farmer_id),
         "message": body.message,
     }).execute()
+    if request_detail.data and request_detail.data.get("farmer_id") != str(farmer_id):
+        create_notification(
+            db,
+            farmer_id=request_detail.data["farmer_id"],
+            title="New response to your help request",
+            message=request_detail.data.get("title", "A member replied to your request."),
+            notification_type="community",
+            action_url=f"/community/groups/{group_id}",
+            metadata={"request_id": request_id, "group_id": group_id},
+        )
     return res.data[0] if res.data else {}
 
 

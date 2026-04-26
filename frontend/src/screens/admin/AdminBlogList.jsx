@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Plus, Loader2, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { ArrowLeft, FileText, Plus, Loader2, Eye, EyeOff, Trash2, Sparkles } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 
 const API = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
@@ -16,6 +16,7 @@ const AdminBlogList = () => {
     const navigate = useNavigate();
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [seeding, setSeeding] = useState(false);
     const headers = { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' };
 
     const fetchPosts = () => {
@@ -41,6 +42,16 @@ const AdminBlogList = () => {
         fetchPosts();
     };
 
+    const seedDemoPosts = async () => {
+        setSeeding(true);
+        try {
+            await fetch(`${API}/api/v1/admin/blog/seed-demo`, { method: 'POST', headers });
+            fetchPosts();
+        } finally {
+            setSeeding(false);
+        }
+    };
+
     return (
         <div className="flex flex-col min-h-screen bg-slate-50 font-sans pb-6">
             <header className="bg-primary px-5 pt-10 pb-5 text-white rounded-b-3xl shadow-md">
@@ -52,9 +63,14 @@ const AdminBlogList = () => {
                         <FileText className="w-6 h-6 text-white/80" />
                         <h1 className="text-xl font-bold">Blog Posts</h1>
                     </div>
-                    <Link to="/admin/blog/new" className="bg-white text-green-700 font-bold text-sm px-4 py-2 rounded-xl hover:bg-green-50 transition-colors flex items-center gap-1.5">
-                        <Plus className="w-4 h-4" /> New
-                    </Link>
+                    <div className="flex items-center gap-2">
+                        <button onClick={seedDemoPosts} disabled={seeding} className="bg-white/15 text-white font-bold text-sm px-4 py-2 rounded-xl hover:bg-white/20 disabled:opacity-60 transition-colors flex items-center gap-1.5">
+                            {seeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Seed Demo
+                        </button>
+                        <Link to="/admin/blog/new" className="bg-white text-green-700 font-bold text-sm px-4 py-2 rounded-xl hover:bg-green-50 transition-colors flex items-center gap-1.5">
+                            <Plus className="w-4 h-4" /> New
+                        </Link>
+                    </div>
                 </div>
             </header>
 

@@ -7,6 +7,7 @@ from dependencies import get_supabase, get_current_farmer_id
 from uuid import UUID
 from typing import Optional
 from pydantic import BaseModel
+from services.notifications import create_notifications_for_admins
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
 
@@ -47,7 +48,18 @@ async def create_ticket(
         "farmer_id": str(farmer_id),
         **body.dict(),
     }).execute()
-    return res.data[0] if res.data else {}
+    if res.data:
+        ticket = res.data[0]
+        create_notifications_for_admins(
+            db,
+            title="New farmer support ticket",
+            message=ticket.get("subject", "A new ticket was created."),
+            notification_type="admin_ticket",
+            action_url=f"/admin/tickets/{ticket['id']}",
+            metadata={"ticket_id": ticket["id"], "farmer_id": str(farmer_id)},
+        )
+        return ticket
+    return {}
 
 
 @router.get("/{ticket_id}")
@@ -82,4 +94,15 @@ async def send_ticket_message(
     }).execute()
     # Update status to waiting_farmer → in_progress
     db.table("farmer_tickets").update({"status": "in_progress"}).eq("id", ticket_id).eq("status", "waiting_farmer").execute()
+    ticket_detail = db.table("farmer_tickets").select("subject, assigned_admin_id").eq("id", ticket_id).single().execute()
+    assigned_admin_id = (ticket_detail.data or {}).get("assigned_admin_id")
+    if assigned_admin_id:
+        create_notifications_for_admins(
+            db,
+            title="Farmer replied to a support ticket",
+            message=(ticket_detail.data or {}).get("subject", "A ticket has a new farmer reply."),
+            notification_type="admin_ticket",
+            action_url=f"/admin/tickets/{ticket_id}",
+            metadata={"ticket_id": ticket_id, "farmer_id": str(farmer_id)},
+        )
     return res.data[0] if res.data else {}

@@ -9,6 +9,8 @@ from services.dify_client import ask_dify
 from services.audit_writer import write_audit_log
 from services.stt_service import transcribe_audio
 from services.tts_service import generate_speech
+from services.agent_actions import plan_and_execute_agent_actions
+from config import settings
 
 router = APIRouter(prefix="/advisory", tags=["Advisory"])
 
@@ -45,38 +47,25 @@ async def ask_advisory(
     farmer_id: UUID = Depends(get_current_farmer_id),
     db: Client = Depends(get_supabase)
 ):
-    # 1. Assemble Context
-    context = await assemble_context(
-        farmer_id, 
-        request.farm_id, 
-        request.crop_record_id, 
-        db, 
-        query=request.farmer_input_text,
-        session_id=request.session_id
+    turn = await _run_advisory_turn(
+        farmer_id=farmer_id,
+        farmer_input_text=request.farmer_input_text,
+        session_id=request.session_id,
+        farm_id=request.farm_id,
+        crop_record_id=request.crop_record_id,
+        db=db,
     )
 
-    # 2. Ask Dify
-    dify_resp = await ask_dify(request.farmer_input_text, context)
-    import re
-    answer_text = re.sub(r'[\*\#]', '', dify_resp.get("answer", ""))
-
-    # 3. Synthesize Speech
-    audio_b64 = ""
-    if answer_text:
-        tts_result = await generate_speech(answer_text)
-        audio_b64 = tts_result.get("audio_b64", "")
-
-    # 4. Write Audit Log
-    await write_audit_log(request.session_id, request.farmer_input_text, dify_resp, context)
-
     return AdvisoryAskResponse(
-        response_text=answer_text,
-        was_deferred_to_kvk=dify_resp.get("was_deferred_to_kvk", False),
+        response_text=turn["response_text"],
+        was_deferred_to_kvk=turn["was_deferred_to_kvk"],
         latency_ms=100,
         session_id=request.session_id,
         message_id=str(uuid4()),
-        conversation_id=dify_resp.get("conversation_id", "fallback"),
-        audio_b64=audio_b64
+        conversation_id=turn["conversation_id"],
+        audio_b64=turn["audio_b64"],
+        executed_actions=turn["executed_actions"],
+        refresh_targets=turn["refresh_targets"],
     )
 
 @router.post("/voice-chat")
@@ -98,23 +87,106 @@ async def voice_chat_endpoint(
         error_msg = stt_result.get("error", "Sorry, audio transcription is unavailable. Please type your question.")
         return {"transcription": "", "answer": error_msg, "audio_response_b64": ""}
 
-    # 2. Assemble Context & Call Dify
-    context = await assemble_context(farmer_uuid, None, None, db, query=transcription)
-    dify_response = await ask_dify(transcription, context)
-
-    import re
-    answer_text = re.sub(r'[\*\#]', '', dify_response.get("answer", ""))
-
-    # 3. Synthesize Speech (TTS)
-    audio_b64 = ""
-    if answer_text:
-        tts_result = await generate_speech(answer_text)
-        audio_b64 = tts_result.get("audio_b64", "")
+    turn = await _run_advisory_turn(
+        farmer_id=farmer_uuid,
+        farmer_input_text=transcription,
+        session_id=conversation_id,
+        farm_id=None,
+        crop_record_id=None,
+        db=db,
+    )
 
     return {
         "transcription": transcription,
-        "answer": answer_text,
-        "audio_response_b64": audio_b64,
-        "conversation_id": dify_response.get("conversation_id"),
-        "was_deferred_to_kvk": dify_response.get("was_deferred_to_kvk", False)
+        "answer": turn["response_text"],
+        "audio_response_b64": turn["audio_b64"],
+        "conversation_id": turn["conversation_id"],
+        "was_deferred_to_kvk": turn["was_deferred_to_kvk"],
+        "executed_actions": turn["executed_actions"],
+        "refresh_targets": turn["refresh_targets"],
+    }
+
+
+async def _run_advisory_turn(
+    farmer_id: UUID,
+    farmer_input_text: str,
+    session_id: str | None,
+    farm_id: str | None,
+    crop_record_id: str | None,
+    db: Client,
+):
+    context = await assemble_context(
+        farmer_id,
+        farm_id,
+        crop_record_id,
+        db,
+        query=farmer_input_text,
+        session_id=session_id,
+    )
+
+    action_result = await plan_and_execute_agent_actions(
+        user_input=farmer_input_text,
+        farmer_id=str(farmer_id),
+        context=context,
+        db=db,
+    )
+
+    refreshed_context = context
+    if action_result["executed_actions"]:
+        refreshed_context = await assemble_context(
+            farmer_id,
+            farm_id,
+            crop_record_id,
+            db,
+            query=farmer_input_text,
+            session_id=session_id,
+        )
+
+    dify_prompt = farmer_input_text
+    follow_up = action_result.get("follow_up_message")
+    if action_result["executed_actions"]:
+        confirmations = " ".join(item["message"] for item in action_result["executed_actions"] if item.get("message"))
+        dify_prompt = (
+            f"I already completed these farmer account actions: {confirmations} "
+            f"Please confirm them briefly and answer the farmer's remaining need, if any. Farmer message: {farmer_input_text}"
+        )
+
+    if follow_up:
+        response_text = follow_up
+        dify_resp = {
+            "answer": follow_up,
+            "was_deferred_to_kvk": False,
+            "conversation_id": "agent-follow-up",
+        }
+    elif not settings.dify_api_url and action_result["executed_actions"]:
+        response_text = " ".join(item["message"] for item in action_result["executed_actions"] if item.get("message"))
+        dify_resp = {
+            "answer": response_text,
+            "was_deferred_to_kvk": False,
+            "conversation_id": "agent-local-action",
+        }
+    else:
+        dify_resp = await ask_dify(dify_prompt, refreshed_context)
+        import re
+        response_text = re.sub(r'[\*\#]', '', dify_resp.get("answer", ""))
+
+    audio_b64 = ""
+    if response_text:
+        tts_result = await generate_speech(response_text)
+        audio_b64 = tts_result.get("audio_b64", "")
+
+    audit_payload = {
+        **dify_resp,
+        "executed_actions": action_result["executed_actions"],
+        "refresh_targets": action_result["refresh_targets"],
+    }
+    await write_audit_log(session_id, farmer_input_text, audit_payload, refreshed_context)
+
+    return {
+        "response_text": response_text,
+        "audio_b64": audio_b64,
+        "conversation_id": dify_resp.get("conversation_id", "fallback"),
+        "was_deferred_to_kvk": dify_resp.get("was_deferred_to_kvk", False),
+        "executed_actions": action_result["executed_actions"],
+        "refresh_targets": action_result["refresh_targets"],
     }

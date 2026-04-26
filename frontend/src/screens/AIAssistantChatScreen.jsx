@@ -12,6 +12,7 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabaseClient';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { useChat } from '../contexts/ChatContext';
+import { dispatchDataRefresh } from '../lib/appEvents';
 
 const CONVERSATION_KEY = (id) => `ks_chat_session_${id}`;
 
@@ -125,6 +126,7 @@ const AIAssistantChatScreen = () => {
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
             setMessages(prev => [...prev, aiMsg]);
+            dispatchDataRefresh(result.refresh_targets || []);
         } catch (error) {
             console.error('[Chat] Backend Error:', error);
             setMessages(prev => [...prev, {
@@ -186,6 +188,7 @@ const AIAssistantChatScreen = () => {
                     audio_b64: data.audio_response_b64,
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 }]);
+                dispatchDataRefresh(data.refresh_targets || []);
             } else if (!data.transcription) {
                  setMessages(prev => [...prev, {
                     id: crypto.randomUUID(),
@@ -279,10 +282,7 @@ const AIAssistantChatScreen = () => {
                                     <User className="w-4 h-4" />
                                 </div>
                             )}
-                            <div className={`relative px-4 py-3 rounded-2xl shadow-sm text-[15px] leading-relaxed ${msg.sender === 'user'
-                                ? 'bg-primary text-white rounded-tr-sm'
-                                : 'bg-white border border-slate-100 text-slate-800 rounded-tl-sm'
-                                }`}>
+                            <div className={`relative px-4 py-3 whitespace-pre-wrap ${msg.sender === 'user' ? 'rounded-2xl rounded-tr-sm bg-primary text-white' : 'rounded-2xl rounded-tl-sm bg-white border border-slate-100 text-slate-800 shadow-sm'} text-[15px] leading-relaxed`}>
                                 {msg.text}
                                 {msg.sender === 'ai' && msg.audio_b64 && (
                                     <div className="mt-2">

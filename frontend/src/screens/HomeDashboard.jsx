@@ -12,6 +12,8 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
 import { getCropRecommendation, getPriceForecast, getWeather, getPublishedBlogs } from '../lib/backendClient';
+import NotificationBell from '../components/NotificationBell';
+import { shouldRefresh, subscribeToDataRefresh } from '../lib/appEvents';
 
 const HomeDashboard = () => {
     const { user, session } = useAuth();
@@ -32,6 +34,15 @@ const HomeDashboard = () => {
     useEffect(() => {
         if (user?.id) fetchData();
     }, [user?.id]);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToDataRefresh((targets) => {
+            if (shouldRefresh(targets, ['dashboard', 'activity', 'finance', 'tickets', 'community', 'farms']) && user?.id) {
+                fetchData();
+            }
+        });
+        return unsubscribe;
+    }, [user?.id, session?.access_token]);
 
     const fetchData = async () => {
         setIsLoading(true);
@@ -142,11 +153,16 @@ const HomeDashboard = () => {
             {/* Header */}
             <header className="bg-primary px-6 pt-8 pb-10 text-primary-foreground shadow-md rounded-b-[2.5rem] relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl translate-x-10 -translate-y-10" />
-                <p className="text-sm text-white/80 font-medium">{getGreeting()} 👋</p>
-                <h1 className="text-2xl font-bold tracking-tight mt-1">{farmer?.full_name || 'Farmer'}</h1>
-                <p className="text-xs text-white/60 mt-1">
-                    {[farmer?.district, farmer?.state].filter(Boolean).join(', ') || 'Location not set'}
-                </p>
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <p className="text-sm text-white/80 font-medium">{getGreeting()} 👋</p>
+                        <h1 className="text-2xl font-bold tracking-tight mt-1">{farmer?.full_name || 'Farmer'}</h1>
+                        <p className="text-xs text-white/60 mt-1">
+                            {[farmer?.district, farmer?.state].filter(Boolean).join(', ') || 'Location not set'}
+                        </p>
+                    </div>
+                    <NotificationBell token={session?.access_token} />
+                </div>
             </header>
 
             {/* Content */}

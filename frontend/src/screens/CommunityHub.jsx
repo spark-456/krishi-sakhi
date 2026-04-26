@@ -9,6 +9,7 @@ import {
     HandshakeIcon, MapPin, Loader2, Search, UserCheck
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { shouldRefresh, subscribeToDataRefresh } from '../lib/appEvents';
 
 const API = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
@@ -25,6 +26,15 @@ const CommunityHub = () => {
     const [joiningId, setJoiningId] = useState(null);
 
     useEffect(() => { if (token) fetchAll(); }, [token]);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToDataRefresh((targets) => {
+            if (shouldRefresh(targets, ['community', 'notifications']) && token) {
+                fetchAll();
+            }
+        });
+        return unsubscribe;
+    }, [token]);
 
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 

@@ -28,6 +28,9 @@ India's agricultural extension worker-to-farmer ratio has fallen below **1 : 5,0
 | 📈 Price forecasting | Prophet time-series model gives 7–14 day directional mandi signals (UP/DOWN/STABLE) |
 | 🌦️ Live weather context | Open-Meteo integrated into every advisory query automatically |
 | 🔬 Soil classification | Capture soil image → YOLOv8n classifies soil type (clay/loam/sandy/red/black/alluvial) |
+| 🤖 AskSakhi action agent | Farmers can create farms, add crops, log activities, log expenses, raise tickets, and post group help requests by chat |
+| 💸 Finance analytics | Expense trend graphs, farm-wise cost split, and smart cost suggestions on the finance screen |
+| 🔔 Notifications & nudges | Ticket updates, community replies, and proactive agronomy nudges surface in-app |
 | 🤝 SakhiNet Cooperative | Join farmer groups, share resources, request help, and chat with peers |
 | 👑 Admin Portal | D3.js interactive network graph, farmer directory, ticket resolution, KVK blogs |
 | 🔒 Safety guardrails | Never gives pesticide dosages, financial guarantees, or medical advice |
@@ -180,6 +183,7 @@ cd frontend && npm install && npm run dev
 | Frontend (React+Vite) | ✅ Live — 18 screens, PWA-installable |
 | Backend (FastAPI) | ✅ Active — 9 routers, context assembly, STT/TTS |
 | Advisory Pipeline | ✅ Working — FastAPI → Dify → gTTS → response |
+| AskSakhi Action Layer | ✅ Working — multi-intent farm, crop, expense, ticket, and community actions |
 | STT | ✅ Groq `whisper-large-v3-turbo` with timeout |
 | TTS | ✅ gTTS Indian English with timeout |
 | ML Services | ✅ All 4 services rebuilt with trained models |
@@ -189,6 +193,8 @@ cd frontend && npm install && npm run dev
 | Plant Disease Detection | ✅ MobileNetV2 Hugging Face classifier |
 | Dify RAG Chatflow | ✅ Chatflow with Knowledge Retrieval (Qdrant) |
 | Weather Integration | ✅ Open-Meteo live weather in context assembly |
+| Notifications | ✅ Ticket, community, and proactive nudge feed available in-app |
+| Finance Analytics | ✅ Trend charts, farm spend split, and suggestion cards on finance screen |
 | SakhiNet Community | ✅ Cooperative groups, help requests, shared resources |
 | Admin Portal | ✅ Network graph, ticket management, farmer directory |
 
@@ -211,12 +217,15 @@ All unsafe queries are deferred to the nearest **Krishi Vigyan Kendra (KVK)** an
 - 🔇 **Voice audio is never stored** — Groq Whisper processes in memory and discards immediately
 - 🔒 **All storage buckets** enforce farmer-scoped path RLS (`path LIKE auth.uid() || '%'`)
 - 🚫 **Service role key** is only used for ML output table inserts and audit logging — never in user-facing code
+- 🧪 **Demo helpers stay secret-safe** — keep real `.env` values local and never commit service-role keys, API keys, or personal access tokens
 
 ---
 
 ## Environment Variables
 
 See `backend/.env.example` and `frontend/.env.example` for full reference.
+
+Important: keep real values only in local `.env` files. Do not paste live Supabase keys, Dify keys, Groq keys, or Git credentials into tracked markdown, scripts, or commits.
 
 ---
 
@@ -229,12 +238,23 @@ See `backend/.env.example` and `frontend/.env.example` for full reference.
 - **`crop_records`** — active/past crops per farm (one active per farm enforced)
 - **`expense_logs`** — categorised farm expenses
 - **`activity_logs`** — farm task timeline
+- **`notifications`** — in-app alerts, ticket updates, community replies, and agronomy nudges
 - **`advisory_sessions` + `advisory_messages`** — full immutable audit trail of every AI interaction
 - **`soil_scans` / `pest_scans`** — ML outputs + S3 image paths (permanent, used for retraining)
 - **`crop_recommendation_requests` / `price_forecast_requests`** — ML query logs
 - **`ref_crops` / `ref_locations` / `ref_knowledge_documents`** — read-only reference tables
 
 > **RLS is enabled on every table.** Farmers can only access their own rows. ML output tables are service-role-insert-only.
+
+---
+
+## Demo Content Helpers
+
+- Admin users can seed representative KVK blog posts directly from the Admin Blog screen using `Seed Demo`.
+- CLI helpers are also available:
+  - `python backend/scripts/populate_demo_data.py`
+  - `python backend/scripts/seed_demo_blogs.py`
+  - `python backend/scripts/run_notification_nudges.py`
 
 ---
 

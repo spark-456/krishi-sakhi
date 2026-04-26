@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Ticket, Plus, ChevronRight, Loader2, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { shouldRefresh, subscribeToDataRefresh } from '../lib/appEvents';
 
 const API = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
@@ -26,14 +27,29 @@ const MyTickets = () => {
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        if (session?.access_token) {
-            fetch(`${API}/api/v1/tickets`, { headers: { Authorization: `Bearer ${session.access_token}` } })
-                .then(r => r.json())
-                .then(setTickets)
-                .finally(() => setLoading(false));
+    const fetchTickets = async () => {
+        if (!session?.access_token) return;
+        setLoading(true);
+        try {
+            const response = await fetch(`${API}/api/v1/tickets`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+            setTickets(response.ok ? await response.json() : []);
+        } finally {
+            setLoading(false);
         }
-    }, [session]);
+    };
+
+    useEffect(() => {
+        fetchTickets();
+    }, [session?.access_token]);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToDataRefresh((targets) => {
+            if (shouldRefresh(targets, ['tickets', 'notifications']) && session?.access_token) {
+                fetchTickets();
+            }
+        });
+        return unsubscribe;
+    }, [session?.access_token]);
 
     const openCount = tickets.filter(t => !['resolved','closed'].includes(t.status)).length;
 

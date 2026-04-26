@@ -113,3 +113,41 @@ export async function getPublishedBlogs({ token, limit = 2 }) {
     if (!resp.ok) throw new Error(`Blog fetch error ${resp.status}`);
     return resp.json();
 }
+
+export async function getNotifications({ token, unreadOnly = false, limit = 25 }) {
+    const url = new URL(`${API_BASE}/api/v1/notifications`);
+    url.searchParams.append('limit', limit.toString());
+    if (unreadOnly) url.searchParams.append('unread_only', 'true');
+    const resp = await fetch(url, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    if (!resp.ok) throw new Error(`Notifications fetch error ${resp.status}`);
+    return resp.json();
+}
+
+export async function markNotificationRead({ notificationId, token, isRead = true }) {
+    const resp = await fetch(`${API_BASE}/api/v1/notifications/${notificationId}`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ is_read: isRead })
+    });
+    if (!resp.ok) throw new Error(`Notification update error ${resp.status}`);
+    return resp.json();
+}
+
+export async function markAllNotificationsRead({ token }) {
+    const resp = await fetch(`${API_BASE}/api/v1/notifications/mark-all-read`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    if (!resp.ok) throw new Error(`Mark-all notifications error ${resp.status}`);
+    return resp.json();
+}

@@ -14,6 +14,7 @@ import {
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
 import AddActivityModal from '../components/AddActivityModal';
+import { shouldRefresh, subscribeToDataRefresh } from '../lib/appEvents';
 
 const ACTIVITY_ICONS = {
     planting: { icon: Sprout, color: 'bg-green-100 text-green-600' },
@@ -42,6 +43,15 @@ const FarmActivityLogs = () => {
 
     useEffect(() => {
         if (user?.id) fetchAll();
+    }, [user?.id]);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToDataRefresh((targets) => {
+            if (shouldRefresh(targets, ['activity', 'dashboard']) && user?.id) {
+                fetchAll();
+            }
+        });
+        return unsubscribe;
     }, [user?.id]);
 
     const fetchAll = async () => {

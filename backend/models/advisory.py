@@ -17,3 +17,5 @@ class AdvisoryAskResponse(BaseModel):
     message_id: Optional[str] = "00000000-0000-0000-0000-000000000000"
     conversation_id: str
     audio_b64: Optional[str] = None
+    executed_actions: list[dict] = Field(default_factory=list)
+    refresh_targets: list[str] = Field(default_factory=list)

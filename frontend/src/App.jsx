@@ -22,6 +22,7 @@ import FarmFinanceTracker from './screens/FarmFinanceTracker';
 import CropDiseaseDetectionCamera from './screens/CropDiseaseDetectionCamera';
 import ProfileScreen from './screens/ProfileScreen';
 import MoreMenu from './screens/MoreMenu';
+import NotificationsScreen from './screens/NotificationsScreen';
 
 // Community (SakhiNet)
 import CommunityHub from './screens/CommunityHub';
@@ -29,6 +30,7 @@ import CoopGroupDetail from './screens/CoopGroupDetail';
 import CreateCoopGroup from './screens/CreateCoopGroup';
 import CreateHelpRequest from './screens/CreateHelpRequest';
 import AddSharedResource from './screens/AddSharedResource';
+import AddCommonRoute from './screens/AddCommonRoute';
 
 // Blog
 import BlogFeed from './screens/BlogFeed';
@@ -37,6 +39,7 @@ import BlogPostView from './screens/BlogPostView';
 // Tickets
 import MyTickets from './screens/MyTickets';
 import CreateTicket from './screens/CreateTicket';
+import TicketDetail from './screens/TicketDetail';
 
 // Admin screens
 import AdminDashboard from './screens/admin/AdminDashboard';
@@ -100,14 +103,16 @@ const App = () => {
             <Route path="/community/create-group"         element={<AuthGuard><CreateCoopGroup /></AuthGuard>} />
             <Route path="/community/create-help"          element={<AuthGuard><CreateHelpRequest /></AuthGuard>} />
             <Route path="/community/add-resource"         element={<AuthGuard><AddSharedResource /></AuthGuard>} />
+            <Route path="/community/add-route"            element={<AuthGuard><AddCommonRoute /></AuthGuard>} />
 
             {/* ── Blog ── */}
             <Route path="/blog"         element={<ProtectedLayout><BlogFeed /></ProtectedLayout>} />
             <Route path="/blog/:postId" element={<AuthGuard><BlogPostView /></AuthGuard>} />
 
             {/* ── Tickets ── */}
-            <Route path="/tickets"     element={<ProtectedLayout><MyTickets /></ProtectedLayout>} />
-            <Route path="/tickets/new" element={<AuthGuard><CreateTicket /></AuthGuard>} />
+            <Route path="/tickets"         element={<ProtectedLayout><MyTickets /></ProtectedLayout>} />
+            <Route path="/tickets/new"     element={<AuthGuard><CreateTicket /></AuthGuard>} />
+            <Route path="/tickets/:ticketId" element={<AuthGuard><TicketDetail /></AuthGuard>} />
 
             {/* ── Other protected ── */}
             <Route path="/add-farm" element={<AuthGuard><AddNewFarmScreen /></AuthGuard>} />
@@ -115,6 +120,7 @@ const App = () => {
             <Route path="/profile"  element={<ProtectedLayout><ProfileScreen /></ProtectedLayout>} />
             <Route path="/finance"  element={<AuthGuard><FarmFinanceTracker /></AuthGuard>} />
             <Route path="/camera"   element={<AuthGuard><CropDiseaseDetectionCamera /></AuthGuard>} />
+            <Route path="/notifications" element={<ProtectedLayout><NotificationsScreen /></ProtectedLayout>} />
 
             {/* ── Admin Portal (admin role required) ── */}
             <Route path="/admin"                  element={<AdminLayout><AdminDashboard /></AdminLayout>} />
