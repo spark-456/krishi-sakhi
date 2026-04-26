@@ -1,0 +1,41 @@
+{
+  "model_name": "weather_stress_xgb",
+  "version": "1.0.0",
+  "created_at": "2026-02-24T15:32:30.047661",
+  "features": [
+    "temperature_2m_mean",
+    "precipitation_sum",
+    "relative_humidity_2m",
+    "et0_fao_evapotranspiration",
+    "vapour_pressure_deficit",
+    "root_zone_moisture",
+    "water_deficit",
+    "heat_index",
+    "rain_3d"
+  ],
+  "target": "stress_probability",
+  "stress_levels": {
+    "low": [
+      0,
+      0.33
+    ],
+    "medium": [
+      0.33,
+      0.66
+    ],
+    "high": [
+      0.66,
+      1
+    ]
+  },
+  "advisory_rules": {
+    "spray_window": {
+      "precipitation_probability_max": 40,
+      "wind_speed_max": 15
+    },
+    "irrigation_needed": {
+      "water_deficit_threshold": 2,
+      "soil_moisture_threshold": 0.25
+    }
+  }
+}

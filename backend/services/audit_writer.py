@@ -14,7 +14,7 @@ async def write_audit_log(session_id: UUID, user_input: str, dify_resp: dict, co
             db.table("advisory_messages").insert({
                 "session_id": str(session_id),
                 "input_channel": "text", 
-                "raw_input_text": user_input,
+                "farmer_input_text": user_input,
                 "response_text": dify_resp.get("answer", ""),
                 "context_block_sent": context,
                 "was_deferred_to_kvk": dify_resp.get("was_deferred_to_kvk", False),

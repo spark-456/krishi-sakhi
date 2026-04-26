@@ -13,15 +13,18 @@ import {
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
+import { getCropRecommendation, getPriceForecast } from '../lib/backendClient';
 
 const ProfileScreen = () => {
     const navigate = useNavigate();
-    const { user, signOut } = useAuth();
+    const { user, session, signOut } = useAuth();
     const [farmer, setFarmer] = useState(null);
     const [farms, setFarms] = useState([]);
     const [cropCount, setCropCount] = useState(0);
     const [activityCount, setActivityCount] = useState(0);
     const [recentLogs, setRecentLogs] = useState([]);
+    const [mlSystemRaw, setMlSystemRaw] = useState(null);
+    const [isMlLoading, setIsMlLoading] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -32,7 +35,7 @@ const ProfileScreen = () => {
 
     useEffect(() => {
         if (user?.id) fetchProfile();
-    }, [user?.id]);
+    }, [user?.id, session?.access_token]);
 
     const fetchProfile = async () => {
         setIsLoading(true);
@@ -44,6 +47,7 @@ const ProfileScreen = () => {
             const { data: farmData } = await supabase
                 .from('farms').select('*').eq('farmer_id', user.id);
             if (farmData) setFarms(farmData);
+            if (session?.access_token) fetchMlSystemOutputs(farmData || []);
 
             // Count active crops across all farms
             const { data: farmerCrops } = await supabase
@@ -62,6 +66,81 @@ const ProfileScreen = () => {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const fetchMlSystemOutputs = async (farmData = farms) => {
+        if (!user?.id || !session?.access_token) return;
+        setIsMlLoading(true);
+
+        const primaryFarmId = farmData?.[0]?.id || null;
+        const nextRaw = {
+            fetched_at: new Date().toISOString(),
+            primary_farm_id: primaryFarmId,
+            live_crop_recommendation: null,
+            live_price_forecast: null,
+            live_price_forecasts: [],
+            stored_latest_crop_recommendation: null,
+            stored_recent_price_forecasts: [],
+            recent_soil_scans: [],
+            recent_pest_scans: [],
+            error: null,
+        };
+
+        try {
+            const [soilRes, pestRes, storedCropRes, storedPriceRes] = await Promise.all([
+                supabase.from('soil_scans').select('*').eq('farmer_id', user.id).order('created_at', { ascending: false }).limit(3),
+                supabase.from('pest_scans').select('*').eq('farmer_id', user.id).order('created_at', { ascending: false }).limit(3),
+                supabase.from('crop_recommendation_requests').select('*').eq('farmer_id', user.id).order('created_at', { ascending: false }).limit(1),
+                supabase.from('price_forecast_requests').select('*').eq('farmer_id', user.id).order('generated_at', { ascending: false }).limit(3),
+            ]);
+
+            nextRaw.recent_soil_scans = soilRes.data || [];
+            nextRaw.recent_pest_scans = pestRes.data || [];
+            nextRaw.stored_latest_crop_recommendation = storedCropRes.data?.[0] || null;
+            nextRaw.stored_recent_price_forecasts = storedPriceRes.data || [];
+
+            if (primaryFarmId) {
+                const cropRec = await getCropRecommendation({ farmId: primaryFarmId, token: session.access_token });
+                nextRaw.live_crop_recommendation = cropRec;
+
+                const forecastCrops = getRecommendedCropNames(cropRec);
+                if (forecastCrops.length > 0) {
+                    const forecasts = await Promise.all(forecastCrops.map(async (cropName) => {
+                        const forecast = await getPriceForecast({
+                            crop: cropName,
+                            horizon: 7,
+                            token: session.access_token,
+                        });
+                        return { crop: cropName, ...forecast };
+                    }));
+                    nextRaw.live_price_forecasts = forecasts;
+                    nextRaw.live_price_forecast = forecasts[0] || null;
+                }
+            }
+        } catch (err) {
+            console.error('[Profile] ML system output error:', err);
+            nextRaw.error = err.message || String(err);
+        } finally {
+            setMlSystemRaw(nextRaw);
+            setIsMlLoading(false);
+        }
+    };
+
+    const getRecommendedCropNames = (cropRec) => {
+        if (!cropRec) return [];
+        const names = [];
+        if (cropRec.top_recommendation) names.push(cropRec.top_recommendation);
+        (cropRec.alternatives || []).forEach(item => {
+            const cropName = item.crop || item.crop_name || item.top_recommendation;
+            if (cropName) names.push(cropName);
+        });
+        const seen = new Set();
+        return names.filter(name => {
+            const key = String(name).trim().toLowerCase();
+            if (!key || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        }).slice(0, 4);
     };
 
     const handleSaveName = async () => {
@@ -201,6 +280,30 @@ const ProfileScreen = () => {
                                 <p className="text-sm font-semibold text-slate-800">{memberSince}</p>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                {/* Raw ML Outputs */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                            <BarChart3 className="w-4 h-4 text-primary" />
+                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Raw ML Outputs</h3>
+                        </div>
+                        <button
+                            onClick={() => fetchMlSystemOutputs(farms)}
+                            disabled={isMlLoading || !session?.access_token}
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 text-xs font-bold text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                        >
+                            {isMlLoading ? 'Loading...' : 'Refresh'}
+                        </button>
+                    </div>
+                    <div className="rounded-xl bg-slate-950 text-slate-100 p-3 max-h-96 overflow-auto">
+                        <pre className="text-[10px] leading-relaxed whitespace-pre-wrap break-words">
+                            {isMlLoading && !mlSystemRaw
+                                ? 'Fetching ML outputs...'
+                                : JSON.stringify(mlSystemRaw || { status: 'No ML output loaded yet' }, null, 2)}
+                        </pre>
                     </div>
                 </div>
 

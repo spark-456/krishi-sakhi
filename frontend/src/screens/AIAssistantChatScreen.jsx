@@ -6,30 +6,35 @@
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Mic, Image as ImageIcon, Sparkles, User, RotateCcw, Loader2 } from 'lucide-react';
-import { askAdvisory, createAdvisorySession, sendVoiceMessage } from '../lib/backendClient';      
+import { useLocation } from 'react-router-dom';
+import { askAdvisory, createAdvisorySession, sendVoiceMessage } from '../lib/backendClient';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabaseClient';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
+import { useChat } from '../contexts/ChatContext';
 
 const CONVERSATION_KEY = (id) => `ks_chat_session_${id}`;
 
 const AIAssistantChatScreen = () => {
     const { user, session } = useAuth();
+    const location = useLocation();
     const [farmerContext, setFarmerContext] = useState(null);
     const { isRecording, audioBlob, startRecording, stopRecording, clearAudio } = useVoiceRecorder();
+    const [recordingSeconds, setRecordingSeconds] = useState(0);
 
-    const [messages, setMessages] = useState([
-        {
-            id: crypto.randomUUID(),
-            sender: 'ai',
-            text: "Namaste! I am Sakhi, your farming expert. How can I help you today?",
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            suggestions: ["What crops suit my soil?", "Check weather forecast", "How to improve yield?"]
+    // Check if we arrived from the soil scanner with a result
+    const incomingSoilResult = location.state?.soilScanResult || null;
+
+    const { messages, setMessages, sessionId, setSessionId, injectSoilResult, handleNewChat } = useChat();
+
+    useEffect(() => {
+        if (incomingSoilResult) {
+            injectSoilResult(incomingSoilResult);
         }
-    ]);
+    }, [incomingSoilResult]);
+
     const [input, setInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
-    const [sessionId, setSessionId] = useState(null);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
@@ -116,6 +121,7 @@ const AIAssistantChatScreen = () => {
                 sender: 'ai',
                 text: result.response_text,
                 audio_b64: result.audio_b64,
+                isNew: true,
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
             setMessages(prev => [...prev, aiMsg]);
@@ -137,6 +143,19 @@ const AIAssistantChatScreen = () => {
             handleVoiceSend(audioBlob);
         }
     }, [audioBlob]);
+
+    useEffect(() => {
+        let interval;
+        if (isRecording) {
+            setRecordingSeconds(0);
+            interval = setInterval(() => {
+                setRecordingSeconds(prev => prev + 1);
+            }, 1000);
+        } else {
+            clearInterval(interval);
+        }
+        return () => clearInterval(interval);
+    }, [isRecording]);
 
     const handleVoiceSend = async (blob) => {
         setIsTyping(true);
@@ -190,14 +209,8 @@ const AIAssistantChatScreen = () => {
         }
     };
 
-    const handleNewChat = () => {
-        setMessages([{
-            id: crypto.randomUUID(),
-            sender: 'ai',
-            text: "Namaste! I am Sakhi, your farming expert. How can I help you today?",
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            suggestions: ["What crops suit my soil?", "Check weather forecast", "How to improve yield?"]
-        }]);
+    const onNewChatClick = () => {
+        handleNewChat();
         
         if (user?.id && session?.access_token) {
             localStorage.removeItem(`ks_chat_session_${user.id}`);
@@ -232,7 +245,7 @@ const AIAssistantChatScreen = () => {
                         </p>
                     </div>
                 </div>
-                <button onClick={handleNewChat} className="p-2 hover:bg-white/10 rounded-full transition-colors" title="Start new conversation">
+                <button onClick={onNewChatClick} className="p-2 hover:bg-white/10 rounded-full transition-colors" title="Start new conversation">
                     <RotateCcw className="w-5 h-5" />
                 </button>
             </header>
@@ -273,7 +286,7 @@ const AIAssistantChatScreen = () => {
                                 {msg.text}
                                 {msg.sender === 'ai' && msg.audio_b64 && (
                                     <div className="mt-2">
-                                        <audio controls autoPlay src={`data:audio/mpeg;base64,${msg.audio_b64}`} className="h-8 w-full max-w-[200px]" />
+                                        <audio controls autoPlay={msg.isNew} onEnded={() => { msg.isNew = false; }} src={`data:audio/mpeg;base64,${msg.audio_b64}`} className="h-8 w-full max-w-[200px]" />
                                     </div>
                                 )}
                                 <div className={`text-[10px] mt-1.5 opacity-70 font-medium ${msg.sender === 'user' ? 'text-right text-green-100' : 'text-slate-400'}`}>
@@ -319,19 +332,29 @@ const AIAssistantChatScreen = () => {
                     <button className="p-1.5 text-slate-400 hover:text-primary transition-colors flex-shrink-0">
                         <ImageIcon className="w-5 h-5" />
                     </button>
-                    <input ref={inputRef} type="text"
-                        className="flex-1 bg-transparent outline-none text-slate-800 placeholder-slate-400 text-sm py-1"
-                        placeholder="Type your farming question..."
-                        value={input} onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={handleKeyDown} disabled={isTyping} />
-                    {input.trim() ? (
+                    {isRecording ? (
+                        <div className="flex-1 flex items-center justify-between text-red-500 font-medium px-2">
+                            <span className="flex items-center gap-2 animate-pulse">
+                                <Mic className="w-4 h-4" /> Recording...
+                            </span>
+                            <span>{Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')}</span>
+                        </div>
+                    ) : (
+                        <input ref={inputRef} type="text"
+                            className="flex-1 bg-transparent outline-none text-slate-800 placeholder-slate-400 text-sm py-1"
+                            placeholder="Type your farming question..."
+                            value={input} onChange={(e) => setInput(e.target.value)}
+                            onKeyDown={handleKeyDown} disabled={isTyping} />
+                    )}
+                    {input.trim() && !isRecording ? (
                         <button onClick={() => handleSend()} disabled={isTyping}
                             className="p-2 bg-primary text-white rounded-full hover:bg-primary/90 transition-colors disabled:opacity-50 flex-shrink-0">
                             <Send className="w-4 h-4" />
                         </button>
                     ) : isRecording ? (
-                        <button onClick={stopRecording} className="p-2 bg-red-500 text-white rounded-full flex-shrink-0 shadow-sm animate-pulse">
-                            <Loader2 className="w-4 h-4 animate-spin" />
+                        <button onClick={stopRecording} className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors flex-shrink-0 animate-pulse shadow-md">
+                            <Loader2 className="w-4 h-4 animate-spin hidden" />
+                            <div className="w-4 h-4 rounded-sm bg-white" />
                         </button>
                     ) : (
                         <button onClick={startRecording} disabled={isTyping} className="p-2 bg-slate-200 text-slate-500 rounded-full hover:bg-slate-300 transition-colors flex-shrink-0">

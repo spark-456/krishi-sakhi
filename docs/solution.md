@@ -12,7 +12,7 @@
 | Type | Agricultural Decision Support Platform |
 | Target Users | Smallholder farmers — Tamil Nadu & Andhra Pradesh |
 | Interface | Progressive Web App (PWA), mobile-first, Android-installable |
-| Deployment | Hybrid (Supabase Cloud + Self-hosted n8n/Dify/ML) |
+| Deployment | Hybrid (Supabase Cloud + Self-hosted Dify/ML) |
 | Cloud Cost | Managed via Free Tiers (Supabase, Groq/OpenRouter) |
 | Stage | Research prototype — not yet in field trial |
 
@@ -32,9 +32,9 @@ graph TB
 
     subgraph ORCH["Layer 2 — Advisory (Dify)"]
         DIFY["Dify Community Edition\nRAG Agent Chatbot"]
-        FAISS["FAISS Vector Store\nnomic-embed-text Embeddings"]
-        LLM["Cloud LLM\nGroq / OpenRouter API"]
-        KB["Knowledge Base\n300–500 token chunks\nMetadata: region/crop/season/topic"]
+        QDRANT["Qdrant Cloud\nVector Store (Dify native)"]
+        LLM["Cloud LLM\nGroq Llama-3.1-8b-instant / OpenRouter Gemini"]
+        KB["Knowledge Base\n6 KB markdown files\ningested via Dify Dataset UI"]
     end
 
     subgraph BACKEND["Layer 3 — Backend & Data (FastAPI + Supabase Cloud)"]
@@ -65,8 +65,8 @@ graph TB
     API --> ML
     API --> SUPA_DB
     API --> WEATHER
-    DIFY --> FAISS
-    FAISS --> KB
+    DIFY --> QDRANT
+    QDRANT --> KB
     DIFY --> LLM
     PRICE --> MANDI
     SOIL --> SUPA_S3
@@ -110,7 +110,7 @@ sequenceDiagram
     FastAPI->>FastAPI: Assemble context_block_sent (JSON)
 
     FastAPI->>Dify: POST Chat API (farmer_input_text + context_block + ml_outputs)
-    Dify->>Dify: FAISS vector search (metadata-filtered: region/crop/season/topic)
+    Dify->>Dify: Qdrant vector search via Knowledge Retrieval node (Dify native)
     Dify->>LLM: Generate response with retrieved chunks
     LLM-->>Dify: Response text
     Dify->>Dify: Evaluate safety guardrails
@@ -433,8 +433,8 @@ graph TD
 
     subgraph VOICE_SVC["Voice Transcriber & Synthesizer"]
         V_IN["Input: audio blob (MediaRecorder)"]
-        V_STT["Groq whisper-large-v3-turbo (Cloud)"]
-        V_TTS["Google Text-to-Speech (gTTS)"]
+        V_STT["Groq whisper-large-v3-turbo (Cloud STT)"]
+        V_TTS["Google gTTS — Indian English (tld=co.in)"]
         V_OUT["Output: transcribed text & Base64 audio"]
         V_DISCARD["Audio NEVER stored — discarded in memory"]
         V_IN --> V_STT --> V_OUT
@@ -473,11 +473,10 @@ graph TD
 ```mermaid
 flowchart LR
     QUERY["Farmer Query\n+ context_block"] --> DIFY["Dify RAG Agent\nChat API"]
-    DIFY --> FILTER["Metadata filter:\nregion / crop / season / topic"]
-    FILTER --> FAISS["FAISS top-k vector search\nnomic-embed-text embeddings\n300–500 token chunks"]
-    FAISS --> CHUNKS["Retrieved chunks"]
+    DIFY --> KB_NODE["Knowledge Retrieval Node\n(Dify native — queries Qdrant)"]
+    KB_NODE --> CHUNKS["Retrieved chunks from Qdrant"]
     CHUNKS --> PROMPT["Data-augmented prompt"]
-    PROMPT --> LLM["Cloud LLM API\n(Fallback: Local Llama 3.1 8B)"]
+    PROMPT --> LLM["Groq Llama-3.1-8b-instant (text)\nOpenRouter Gemini 2.5 Flash (vision)"]
     LLM --> SAFETY{"Safety guardrail\nevaluation"}
     SAFETY -->|Safe| RESPONSE["Return response"]
     SAFETY -->|Unsafe| KVK["Defer to KVK\nwas_deferred_to_kvk = true"]
@@ -553,23 +552,24 @@ flowchart TD
 | Backend | Auth | Supabase Auth (Cloud) — Phone OTP |
 | Backend | Database | Supabase PostgreSQL (Cloud) |
 | Backend | Storage | Supabase Storage / S3 (Cloud) |
-| Orchestration | Workflow & Data | Dify (Direct Chat API integration with FastAPI) |
-| RAG | Agent | Dify Community Edition (Chatbot support) |
-| RAG | Vector search | FAISS |
-| RAG | Embeddings | nomic-embed-text via Ollama |
-| RAG | LLM | Cloud API (Primary) / Local Llama (Fallback) |
-| ML | Voice STT | Groq whisper-large-v3-turbo (Cloud) |
-| ML | Voice TTS | Google Text-to-Speech (gTTS) |
+| RAG | Agent | Dify Community Edition (self-hosted Chat API) |
+| RAG | Vector search | Qdrant Cloud (Dify native VECTOR_STORE) |
+| RAG | Embeddings | Dify-managed embedding provider |
+| RAG | LLM (text) | Groq `Llama-3.1-8b-instant` |
+| RAG | LLM (vision) | OpenRouter `google/gemini-2.5-flash-image-preview:free` |
+| RAG | LLM (fallback) | Groq direct API call (if Dify fails) |
+| ML | Voice STT | Groq `whisper-large-v3-turbo` (Cloud, English) |
+| ML | Voice TTS | Google gTTS — Indian English (`tld=co.in`) |
 | ML | Soil | YOLOv8n (Ultralytics, classification mode) |
 | ML | Crops | Random Forest (scikit-learn) |
-| ML | Prices | Prophet (Meta/Facebook) |
+| ML | Prices | Prophet (Meta/Facebook) / rule-based directional |
 | Infra | Containers | Docker Compose |
 | External | Weather | Open-Meteo (free, no key) |
 | External | Mandi prices | data.gov.in (free, open government) |
 
 **Constraints & Strategy:**
-- Utilize free tiers for cloud services (Supabase Cloud, Groq, OpenRouter) to preserve local system resources.
-- Offload heavy tasks (cloud LLM, Cloud DB) overhead while keeping orchestration flexible.
+- Utilize free tiers (Supabase Cloud, Groq, OpenRouter) — no local GPU or Ollama required.
+- FAISS, Ollama, n8n, and nomic-embed-text are NOT in this stack — replaced by Qdrant + Groq + Dify native retrieval.
 
 ---
 
@@ -636,7 +636,7 @@ flowchart TD
 4. Always populate `advisory_messages.context_block_sent` and `retrieved_chunk_ids` on every turn.
 5. Validate `farmer_id` against `auth.uid()` before any write operation.
 6. Do not modify `ref_*` tables through application layer — migration-controlled only.
-7. Leverage n8n for data pipelines, Supabase S3 bucket pushes, and embedding generation where possible.
+7. Knowledge base ingestion is done via the Dify Dataset UI — do NOT use n8n or custom Python ingestion scripts.
 8. When safety guardrail is ambiguous — defer to KVK and log.
 9. All new tables must include `farmer_id uuid FK → farmers.id` + RLS before production use.
 10. Supabase Cloud is the source of truth for DB and Storage; context assembly still requires single-pass reads.

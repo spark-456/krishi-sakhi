@@ -5,6 +5,8 @@ export function useVoiceRecorder() {
     const [audioBlob, setAudioBlob] = useState(null)
     const mediaRecorderRef = useRef(null)
     const chunksRef = useRef([])
+    const timerRef = useRef(null)
+    const startTimeRef = useRef(null)
 
     const startRecording = async () => {
         try {
@@ -23,6 +25,12 @@ export function useVoiceRecorder() {
 
             mediaRecorder.start()
             setIsRecording(true)
+            startTimeRef.current = Date.now()
+            
+            // Auto stop after 60 seconds
+            timerRef.current = setTimeout(() => {
+                stopRecording()
+            }, 60000)
         } catch (error) {
             console.error("Microphone access failed", error);
             alert("Microphone access failed. Please check permissions.");
@@ -30,6 +38,23 @@ export function useVoiceRecorder() {
     }
 
     const stopRecording = () => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current)
+        }
+        
+        const duration = Date.now() - (startTimeRef.current || 0)
+        if (duration < 500) {
+            console.warn("Recording too short (<500ms), ignoring.")
+            if (mediaRecorderRef.current) {
+                // Remove the ondataavailable and onstop so we don't save the blob
+                mediaRecorderRef.current.onstop = null
+                mediaRecorderRef.current.ondataavailable = null
+                mediaRecorderRef.current.stop()
+            }
+            setIsRecording(false)
+            return
+        }
+
         if (mediaRecorderRef.current) {
             mediaRecorderRef.current.stop()
         }

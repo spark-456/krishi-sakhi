@@ -2,3 +2,10 @@ scikit-learn
 fastapi
 joblib
 uvicorn
+pandas
+numpy
+xgboost
+scikit-learn
+fastapi
+joblib
+uvicorn

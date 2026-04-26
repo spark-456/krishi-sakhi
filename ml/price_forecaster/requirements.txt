@@ -1,4 +1,5 @@
-prophet
-fastapi
 pandas
+fastapi
+pydantic
+numpy
 uvicorn

@@ -5,10 +5,11 @@
  * Supports adding new expenses with category selection.
  */
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, TrendingDown, IndianRupee, Plus, Loader2, X, Trash2 } from 'lucide-react';
+import { ArrowLeft, TrendingDown, IndianRupee, Plus, Loader2, X, Trash2, Sprout } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
+import { getCropRecommendation } from '../lib/backendClient';
 
 const CATEGORIES = [
     { value: 'seeds', label: '🌱 Seeds', color: 'bg-emerald-500' },
@@ -22,7 +23,7 @@ const CATEGORIES = [
 
 const FarmFinanceTracker = () => {
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, session } = useAuth();
     const [expenses, setExpenses] = useState([]);
     const [farms, setFarms] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -60,6 +61,17 @@ const FarmFinanceTracker = () => {
             setIsLoading(false);
         }
     };
+    
+    // ML Recommendation Placard
+    const [cropRec, setCropRec] = useState(null);
+    useEffect(() => {
+        if (farms.length > 0 && session?.access_token) {
+            const primaryFarmId = farms[0].id;
+            getCropRecommendation({ farmId: primaryFarmId, token: session.access_token })
+                .then(res => setCropRec(res?.top_recommendation))
+                .catch(err => console.error(err));
+        }
+    }, [farms, session]);
 
     const handleAddExpense = async (e) => {
         e.preventDefault();
@@ -150,6 +162,19 @@ const FarmFinanceTracker = () => {
                         {expenses.length} transaction{expenses.length !== 1 ? 's' : ''} recorded
                     </p>
                 </div>
+                
+                {/* AI Crop Placard */}
+                {cropRec && (
+                    <div className="mt-4 bg-emerald-500/20 border border-emerald-400/30 rounded-xl p-3 flex items-center gap-3 backdrop-blur-sm">
+                        <div className="bg-emerald-500/30 p-2 rounded-lg">
+                            <Sprout className="w-5 h-5 text-emerald-100" />
+                        </div>
+                        <div>
+                            <p className="text-xs font-semibold text-emerald-100 uppercase tracking-widest">Season Suggestion</p>
+                            <p className="text-sm font-bold text-white leading-tight">Consider planting <span className="text-emerald-300">{cropRec}</span> next to maximize layout and returns.</p>
+                        </div>
+                    </div>
+                )}
             </header>
 
             <main className="flex-1 p-5 space-y-6 -mt-2">

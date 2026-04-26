@@ -31,10 +31,10 @@ The system is composed of three loosely coupled layers. Every agent working on t
 
 ### 2.2 Layer 2 — Advisory (Dify)
 - **Dify Community Edition** (self-hosted via Docker) is the RAG agent, connected directly to the FastAPI backend via HTTP API
-  - Knowledge base: curated agricultural documents chunked into 300–500 token segments
-  - Embeddings: `nomic-embed-text` via Ollama
-  - Retrieval: FAISS vector search with metadata-filtered top-k (filters: region, crop, season, topic category)
-  - LLM: **Cloud LLM API** (e.g., Groq, OpenAI) is the primary model, with local **Llama 3.1 8B** via Ollama acting as a fallback
+  - Knowledge base: 6 curated agricultural markdown files ingested via Dify Dataset UI
+  - Embeddings: Dify-managed embedding provider
+  - Retrieval: Qdrant Cloud (Dify native VECTOR_STORE — Knowledge Retrieval node)
+  - LLM: **Groq `Llama-3.1-8b-instant`** (text primary) / **OpenRouter Gemini 2.5 Flash** (vision/image) with Groq direct API fallback if Dify fails
 - **Request flow:** FastAPI assembles farmer context → POSTs directly to Dify Chat API → Dify performs RAG + LLM generation → returns response to FastAPI
 - **Safety constraints:** the advisory layer has explicit policy guardrails — it will refuse specific pesticide dosages, financial predictions, and non-agricultural advice, and defer to Krishi Vigyan Kendra (KVK) for unsafe queries
 
@@ -111,8 +111,8 @@ This is the exact sequence for a single farmer query. Every agent touching the b
    └── pre-computed ML outputs
 
 4. Dify RAG agent:
-   └── Performs FAISS vector search with metadata filters
-   └── Cloud LLM (or local Llama fallback) generates grounded response using retrieved chunks
+   └── Queries Qdrant via Knowledge Retrieval node (Dify native)
+   └── Groq Llama-3.1-8b-instant (text) or OpenRouter Gemini 2.5 Flash (vision) generates grounded response
    └── Safety guardrails evaluated
 
 5. Dify returns response directly to FastAPI
@@ -397,19 +397,23 @@ Agents must adhere to this architectural vision. Cloud API LLMs are preferred fo
 | Voice capture | Browser MediaRecorder API | Native, no library |
 | Backend API | FastAPI | Python |
 | Auth | Supabase Auth | Phone/OTP |
-| Database | Supabase PostgreSQL | Self-hosted |
-| Object storage | Supabase Storage (S3) | Self-hosted |
-| RAG agent | Dify Community Edition | Self-hosted via Docker |
-| Vector search | FAISS | Within Dify |
-| Embeddings | nomic-embed-text | Via Ollama |
-| LLM | Cloud APIs & Llama 3.1 8B | Cloud API primary, Ollama local fallback |
-| Voice transcription | Groq whisper-large-v3-turbo | Cloud STT |
-| Voice synthesis | Google Text-to-Speech (gTTS) | Python library |
+| Database | Supabase PostgreSQL | Cloud (ap-south-1) |
+| Object storage | Supabase Storage (S3) | Cloud |
+| RAG agent | Dify Community Edition | Self-hosted via Docker, Chat API |
+| Vector search | Qdrant Cloud | Dify native VECTOR_STORE |
+| Embeddings | Dify-managed embedding provider | Configured in Dify Dataset settings |
+| LLM (text) | Groq `Llama-3.1-8b-instant` | Cloud, fast, free tier |
+| LLM (vision) | OpenRouter `gemini-2.5-flash-image-preview:free` | For image analysis |
+| LLM (fallback) | Groq direct API | If Dify is unreachable |
+| Voice transcription | Groq `whisper-large-v3-turbo` | Cloud STT, English |
+| Voice synthesis | Google gTTS (Indian English) | `lang=en, tld=co.in` |
 | Soil classification | YOLOv8n | Ultralytics, classification mode |
 | Crop recommendation | Random Forest | scikit-learn |
-| Price forecasting | Prophet | Meta/Facebook |
+| Price forecasting | Prophet / rule-based | Meta/Facebook; directional only |
 | Containerisation | Docker Compose | All services |
-| Cloud cost | Variable | Free tiers or funded API keys for LLMs |
+| Cloud cost | Free tiers | Supabase, Groq, OpenRouter, Qdrant |
+
+> **NOT in this stack:** FAISS, Ollama (no local LLM), n8n, nomic-embed-text — all replaced or removed.
 
 ---
 
@@ -475,7 +479,7 @@ Agents should be aware of these gaps and not build features that assume they are
 
 These rules apply to any AI agent or automated system processing this document.
 
-1. **Cloud LLMs are primary, local LLMs are fallbacks.** Always use a cloud LLM API (Groq, OpenAI, Anthropic, Gemini) as the primary inference engine in the advisory pipeline for speed and intelligence. The local self-hosted Llama 3.1 8B is kept strictly as a fallback in case of API outages or quota limits.
+1. **Cloud LLMs are primary — no local Ollama required.** Groq `Llama-3.1-8b-instant` is the primary model. Groq direct API is the fallback if Dify is unreachable. Do NOT use Ollama or local Llama.
 
 2. **Never store farmer voice audio** anywhere — not temporarily in a database column, not as a named file in S3, not in logs. Audio is memory-only, transcribe-and-discard.
 

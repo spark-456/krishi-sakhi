@@ -21,6 +21,7 @@ import ProfileScreen from './screens/ProfileScreen';
 
 import BottomNavigation from './components/BottomNavigation';
 import AuthGuard from './components/AuthGuard';
+import { ChatProvider } from './contexts/ChatContext';
 
 /**
  * ProtectedLayout — Single source of truth for BottomNav spacing.
@@ -39,8 +40,9 @@ const App = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex justify-center">
       <div className="w-full max-w-md bg-white min-h-screen shadow-2xl relative overflow-x-hidden">
-        <Routes>
-          {/* Public */}
+        <ChatProvider>
+          <Routes>
+            {/* Public */}
           <Route path="/" element={<WelcomeScreen />} />
           <Route path="/login" element={<PhoneNumberLogin />} />
 
@@ -74,7 +76,8 @@ const App = () => {
           } />
 
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+          </Routes>
+        </ChatProvider>
       </div>
     </div>
   );

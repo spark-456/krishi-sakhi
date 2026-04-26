@@ -29,3 +29,8 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+#Folder
+.vscode
+.agent
+.pavan-drive-ml

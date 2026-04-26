@@ -176,7 +176,7 @@ const FarmerRegistrationFlow = () => {
                 }
 
                 // 1. Ask FastAPI backend to create the account via Service Role (bypassing limits)
-                let backendHost = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+                let backendHost = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
                 if (backendHost.endsWith('/')) backendHost = backendHost.slice(0, -1);
                 
                 const regRes = await fetch(`${backendHost}/api/v1/auth/register`, {
