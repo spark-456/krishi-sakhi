@@ -7,18 +7,24 @@
  * @see supabaseClient.js — farmers, farms tables
  */
 import React, { useState, useEffect } from 'react';
-import { IndianRupee, CloudSun, TrendingUp, Droplets, Leaf, ChevronRight, Loader2, Sprout, MessageSquare, Camera, BookOpen, AlertCircle, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
+import { IndianRupee, CloudSun, TrendingUp, Droplets, Leaf, ChevronRight, Loader2, Sprout, MessageSquare, Camera, BookOpen, Bell, Sun, Calendar, Info } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
-import { getCropRecommendation, getPriceForecast } from '../lib/backendClient';
+import { getCropRecommendation, getPriceForecast, getWeather, getPublishedBlogs } from '../lib/backendClient';
 
 const HomeDashboard = () => {
     const { user, session } = useAuth();
     const [farmer, setFarmer] = useState(null);
     const [farms, setFarms] = useState([]);
+    const [activeCrop, setActiveCrop] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     
+    // Additional Data States
+    const [weather, setWeather] = useState(null);
+    const [blogs, setBlogs] = useState([]);
+    const [isWeatherLoading, setIsWeatherLoading] = useState(false);
+
     // ML States
     const [cropRec, setCropRec] = useState(null);
     const [isRecLoading, setIsRecLoading] = useState(false);
@@ -43,6 +49,15 @@ const HomeDashboard = () => {
                 .eq('farmer_id', user.id);
             if (farmData) setFarms(farmData);
             
+            const { data: cropData } = await supabase
+                .from('crop_records')
+                .select('*')
+                .eq('farmer_id', user.id)
+                .eq('status', 'active')
+                .order('sowing_date', { ascending: false })
+                .limit(1);
+            if (cropData && cropData.length > 0) setActiveCrop(cropData[0]);
+            
             // Fetch ML insights silently
             if (session?.access_token) {
                 fetchMLInsights(session.access_token, farmData?.[0]?.id);
@@ -61,7 +76,13 @@ const HomeDashboard = () => {
     const fetchMLInsights = async (token, primaryFarmId) => {
         setIsRecLoading(true);
         setIsPriceLoading(true);
+        setIsWeatherLoading(true);
         try {
+            // Fetch Weather and KVK Blogs in parallel
+            Promise.allSettled([
+                getWeather({ token }).then(setWeather),
+                getPublishedBlogs({ token, limit: 2 }).then((data) => setBlogs(data?.posts || []))
+            ]).finally(() => setIsWeatherLoading(false));
             const rec = await getCropRecommendation({ farmId: primaryFarmId, token });
             setCropRec(rec);
             
@@ -82,6 +103,18 @@ const HomeDashboard = () => {
         if (hour < 12) return 'Good Morning';
         if (hour < 17) return 'Good Afternoon';
         return 'Good Evening';
+    };
+
+    const getGrowthProgress = (crop) => {
+        if (!crop?.sowing_date) return 0;
+        const start = new Date(crop.sowing_date);
+        const now = new Date();
+        const days = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+        const estHarvestDays = 120; // fallback avg
+        return {
+            percent: Math.min(Math.max((days / estHarvestDays) * 100, 0), 100),
+            days: days
+        };
     };
 
     const totalAcres = farms.reduce((sum, f) => sum + (parseFloat(f.area_acres) || 0), 0);
@@ -160,19 +193,23 @@ const HomeDashboard = () => {
                 <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-5">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Today's Weather</h3>
-                        <CloudSun className="w-5 h-5 text-amber-500" />
+                        {isWeatherLoading ? (
+                            <Loader2 className="w-5 h-5 text-slate-300 animate-spin" />
+                        ) : (
+                            <CloudSun className="w-5 h-5 text-amber-500" />
+                        )}
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                         <div className="text-center">
-                            <p className="text-2xl font-bold text-slate-800">32°</p>
+                            <p className="text-2xl font-bold text-slate-800">{weather?.temperature ? `${Math.round(weather.temperature)}°` : '--'}</p>
                             <p className="text-xs text-slate-500">Temperature</p>
                         </div>
                         <div className="text-center border-x border-slate-100">
-                            <p className="text-2xl font-bold text-blue-600 flex items-center justify-center gap-1"><Droplets className="w-4 h-4" />75%</p>
+                            <p className="text-2xl font-bold text-blue-600 flex items-center justify-center gap-1"><Droplets className="w-4 h-4" />{weather?.humidity ? `${Math.round(weather.humidity)}%` : '--'}</p>
                             <p className="text-xs text-slate-500">Humidity</p>
                         </div>
                         <div className="text-center">
-                            <p className="text-2xl font-bold text-emerald-600">2mm</p>
+                            <p className="text-2xl font-bold text-emerald-600">{weather?.rain !== undefined ? `${weather.rain}mm` : '--'}</p>
                             <p className="text-xs text-slate-500">Rainfall</p>
                         </div>
                     </div>
@@ -187,17 +224,41 @@ const HomeDashboard = () => {
                         </Link>
                     </div>
                     {farms.length > 0 ? (
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-green-50/80 rounded-2xl p-4">
-                                <Sprout className="w-5 h-5 text-green-600 mb-2" />
-                                <p className="text-2xl font-bold text-slate-800">{farms.length}</p>
-                                <p className="text-xs text-slate-500 font-medium">Active Farms</p>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-green-50/80 rounded-2xl p-4">
+                                    <Sprout className="w-5 h-5 text-green-600 mb-2" />
+                                    <p className="text-2xl font-bold text-slate-800">{farms.length}</p>
+                                    <p className="text-xs text-slate-500 font-medium">Active Farms</p>
+                                </div>
+                                <div className="bg-blue-50/80 rounded-2xl p-4">
+                                    <TrendingUp className="w-5 h-5 text-blue-600 mb-2" />
+                                    <p className="text-2xl font-bold text-slate-800">{totalAcres}</p>
+                                    <p className="text-xs text-slate-500 font-medium">Total Acres</p>
+                                </div>
                             </div>
-                            <div className="bg-blue-50/80 rounded-2xl p-4">
-                                <TrendingUp className="w-5 h-5 text-blue-600 mb-2" />
-                                <p className="text-2xl font-bold text-slate-800">{totalAcres}</p>
-                                <p className="text-xs text-slate-500 font-medium">Total Acres</p>
-                            </div>
+                            
+                            {/* Growth Stage Progress Bar */}
+                            {activeCrop && (
+                                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <p className="text-sm font-bold text-slate-700">{activeCrop.crop_name}</p>
+                                        <p className="text-xs font-medium text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">Day {getGrowthProgress(activeCrop).days}</p>
+                                    </div>
+                                    <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div 
+                                            className="h-full bg-emerald-500 rounded-full transition-all duration-1000 ease-out"
+                                            style={{ width: `${getGrowthProgress(activeCrop).percent}%` }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between mt-2 text-[10px] font-bold text-slate-400 uppercase">
+                                        <span>Sown</span>
+                                        <span>Vegetative</span>
+                                        <span>Flowering</span>
+                                        <span>Harvest</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <Link to="/add-farm" className="block p-5 bg-slate-50 rounded-2xl text-center border-2 border-dashed border-slate-200 hover:bg-slate-100 hover:border-slate-300 transition-colors">
@@ -252,6 +313,33 @@ const HomeDashboard = () => {
                         </Link>
                     </div>
                 </div>
+
+                {/* KVK Updates Section */}
+                {blogs.length > 0 && (
+                    <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-3xl shadow-sm border border-indigo-100 p-5">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+                                <Bell className="w-4 h-4 text-indigo-500" /> KVK Updates
+                            </h3>
+                            <Link to="/more" className="text-indigo-600 text-xs font-semibold flex items-center gap-1">
+                                All <ChevronRight className="w-3 h-3" />
+                            </Link>
+                        </div>
+                        <div className="space-y-3">
+                            {blogs.map(blog => (
+                                <div key={blog.id} className="bg-white/80 backdrop-blur-sm rounded-2xl p-3 border border-indigo-50 flex items-start gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                                        <Info className="w-5 h-5 text-indigo-600" />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-bold text-slate-800 line-clamp-1">{blog.title}</h4>
+                                        <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{blog.summary || blog.content?.substring(0, 50)}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
     );

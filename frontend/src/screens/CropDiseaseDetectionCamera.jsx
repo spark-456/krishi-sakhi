@@ -23,7 +23,8 @@ const SOIL_EMOJI = {
 const CropDiseaseDetectionCamera = () => {
     const navigate = useNavigate();
     const fileInputRef = useRef(null);
-    const cameraInputRef = useRef(null);
+    const videoRef = useRef(null);
+    const streamRef = useRef(null);
 
     const [phase, setPhase] = useState('idle'); // idle | scanning | result | error
     const [scanMode, setScanMode] = useState('soil'); // 'soil' | 'pest'
@@ -82,7 +83,60 @@ const CropDiseaseDetectionCamera = () => {
         setScanResult(null);
         setErrorMsg('');
         if (fileInputRef.current) fileInputRef.current.value = '';
-        if (cameraInputRef.current) cameraInputRef.current.value = '';
+    };
+
+    // Camera Stream Logic
+    const startCamera = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment' } 
+            });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+            }
+            streamRef.current = stream;
+        } catch (err) {
+            console.warn('Camera permission denied or not available:', err);
+            // Fallback: It will just be a black box, users can still use gallery
+        }
+    };
+
+    const stopCamera = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+    };
+
+    React.useEffect(() => {
+        if (phase === 'idle') {
+            startCamera();
+        } else {
+            stopCamera();
+        }
+        return () => stopCamera();
+    }, [phase]);
+
+    const handleCapture = () => {
+        if (!videoRef.current || !streamRef.current) {
+            // Fallback if camera stream failed: just trigger the old file input 
+            // Wait, we removed the camera input. Let's just alert if no camera.
+            alert("Camera not available. Please use the Gallery upload.");
+            return;
+        }
+        
+        const video = videoRef.current;
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        canvas.toBlob((blob) => {
+            if (!blob) return;
+            const file = new File([blob], 'capture.jpg', { type: 'image/jpeg' });
+            processSoilImage(file);
+        }, 'image/jpeg', 0.8);
     };
 
     const handleAskSakhi = () => {
@@ -108,19 +162,11 @@ const CropDiseaseDetectionCamera = () => {
     if (phase === 'idle') {
         return (
             <div className="flex flex-col h-screen bg-black font-sans relative overflow-hidden">
-                {/* Hidden inputs */}
+                {/* Hidden input for Gallery */}
                 <input
                     ref={fileInputRef}
                     type="file"
                     accept="image/*"
-                    className="hidden"
-                    onChange={handleFileChange}
-                />
-                <input
-                    ref={cameraInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
                     className="hidden"
                     onChange={handleFileChange}
                 />
@@ -157,11 +203,13 @@ const CropDiseaseDetectionCamera = () => {
                         </button>
                     </div>
 
-                    <div className="relative w-72 h-72 rounded-3xl overflow-hidden shadow-2xl border-2 border-white/20">
-                        <img
-                            src="https://images.unsplash.com/photo-1464226184884-fa280b87c399?q=80&w=600&auto=format&fit=crop"
-                            alt="Soil sample"
-                            className="w-full h-full object-cover brightness-75"
+                    <div className="relative w-72 h-72 rounded-3xl overflow-hidden shadow-2xl border-2 border-white/20 bg-zinc-900">
+                        <video 
+                            ref={videoRef} 
+                            autoPlay 
+                            playsInline 
+                            muted
+                            className="w-full h-full object-cover"
                         />
                         {/* Scanning overlay animation */}
                         <div className="absolute inset-0 flex items-center justify-center">
@@ -195,7 +243,7 @@ const CropDiseaseDetectionCamera = () => {
 
                             {/* Camera capture */}
                             <button
-                                onClick={() => cameraInputRef.current?.click()}
+                                onClick={handleCapture}
                                 className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center hover:scale-105 transition-transform active:scale-95"
                             >
                                 <div className="w-full h-full bg-white rounded-full flex items-center justify-center text-black m-1">

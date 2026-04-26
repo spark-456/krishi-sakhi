@@ -2,13 +2,11 @@
 
 > An AI-powered Agricultural Decision Support Platform for smallholder farmers in India.
 
-
 <p align="center">
   <img src="frontend/public/screenshots/Get-started.png" width="30%" />
   <img src="frontend/public/screenshots/Dashboard-new.png" width="30%" />
   <img src="frontend/public/screenshots/Log-phone.png" width="30%" />
 </p>
-
 
 ---
 
@@ -29,6 +27,9 @@ India's agricultural extension worker-to-farmer ratio has fallen below **1 : 5,0
 | 🪲 Pest / disease detection | Upload a photo → MobileNetV2 classifies likely crop disease |
 | 📈 Price forecasting | Prophet time-series model gives 7–14 day directional mandi signals (UP/DOWN/STABLE) |
 | 🌦️ Live weather context | Open-Meteo integrated into every advisory query automatically |
+| 🔬 Soil classification | Capture soil image → YOLOv8n classifies soil type (clay/loam/sandy/red/black/alluvial) |
+| 🤝 SakhiNet Cooperative | Join farmer groups, share resources, request help, and chat with peers |
+| 👑 Admin Portal | D3.js interactive network graph, farmer directory, ticket resolution, KVK blogs |
 | 🔒 Safety guardrails | Never gives pesticide dosages, financial guarantees, or medical advice |
 
 ---
@@ -75,39 +76,6 @@ India's agricultural extension worker-to-farmer ratio has fallen below **1 : 5,0
 
 ---
 
-## Request Flow (single advisory turn)
-
-```
-Farmer input (text / voice / image)
-    │
-    ├─ Voice  → Groq Whisper STT → transcribed text (audio discarded immediately)
-    ├─ Image  → soil or plant disease model → class + confidence appended to context
-    └─ Text   → enters pipeline directly
-    │
-    ▼
-FastAPI assembles context block:
-    farmers (name, district, language)
-    + farms (area, soil_type, irrigation)
-    + crop_records (active crop, growth stage)
-    + expense_logs (last 30 days, by category)
-    + Open-Meteo (live weather for district)
-    + ML output (if image was sent)
-    │
-    ▼
-POST to Dify Chat API
-    Dify: Knowledge Retrieval (Qdrant) → LLM generation
-    Safety guardrail evaluation
-    │
-    ▼
-FastAPI: gTTS converts response text → Base64 audio
-FastAPI writes advisory_messages (full audit record)
-    │
-    ▼
-Response returned to PWA → displayed + played to farmer
-```
-
----
-
 ## ML Model Performance
 
 | Model | Metric | Score |
@@ -150,42 +118,25 @@ Response returned to PWA → displayed + played to farmer
 
 ---
 
-## Quick Start (Local Development)
+## Quick Start
 
-### Prerequisites
-- Python 3.11+ with venv
-- Node.js 18+
-- Supabase project (configured in `.env`)
-- Dify instance running (local or cloud)
-- Groq API key
+See [`SETUP.md`](./SETUP.md) for complete setup instructions.
 
-### Backend
+### TL;DR
 
 ```bash
-cd backend
-# Activate virtualenv
-.\venv\Scripts\Activate.ps1       # Windows
-source venv/bin/activate           # macOS/Linux
+# 1. ML Services (4 separate terminals)
+cd ml/soil_classifier   && pip install -r requirements.txt && uvicorn main:app --port 8001 --reload
+cd ml/crop_recommender  && pip install -r requirements.txt && uvicorn main:app --port 8002 --reload
+cd ml/price_forecaster  && pip install -r requirements.txt && uvicorn main:app --port 8003 --reload
+cd ml/plant_disease_classifier && pip install -r requirements.txt && python download_model.py && uvicorn main:app --port 8004 --reload
 
-# Copy and configure environment
-cp .env.example .env               # Edit with your keys (root .env is also read)
+# 2. Backend
+cd backend && .\venv\Scripts\Activate.ps1 && uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-# Start the server
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# 3. Frontend
+cd frontend && npm install && npm run dev
 ```
-
-Backend will be available at: http://localhost:8000
-API docs at: http://localhost:8000/docs
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Frontend will be available at: http://localhost:5173
 
 ---
 
@@ -197,45 +148,49 @@ Frontend will be available at: http://localhost:5173
 │   └── src/
 │       ├── screens/   # All app screens (Dashboard, Chat, Farms, Camera, etc.)
 │       ├── components/ # Shared UI components + modals
+│       ├── contexts/  # ChatContext (session state)
 │       ├── hooks/     # useAuth, useVoiceRecorder
 │       └── lib/       # backendClient.js, supabaseClient.js
 │
 ├── backend/           # FastAPI application
-│   ├── routers/       # advisory, farms, crops, expenses, activity, ml_scans, auth, weather
-│   ├── services/      # context_assembler, dify_client, stt_service, tts_service, weather_client
-│   ├── models/        # Pydantic schemas
-│   └── requirements.txt
+│   ├── routers/       # advisory, farms, crops, expenses, activity, ml_scans, ml_insights, auth, weather
+│   ├── services/      # context_assembler, dify_client, stt_service, tts_service, weather_client, qdrant_client
+│   └── config.py      # Pydantic settings (reads from .env)
 │
 ├── ml/
-│   ├── soil_classifier/   # YOLOv8n FastAPI service (port 8001)
-│   ├── crop_recommender/  # Random Forest FastAPI service (port 8002)
-│   ├── price_forecaster/  # Prophet FastAPI service (port 8003)
+│   ├── soil_classifier/          # YOLOv8n FastAPI service (port 8001)
+│   ├── crop_recommender/         # Random Forest FastAPI service (port 8002)
+│   ├── price_forecaster/         # Prophet FastAPI service (port 8003)
 │   ├── plant_disease_classifier/ # Hugging Face MobileNetV2 service (port 8004)
-│   └── transcriber/       # Legacy (STT now handled by backend directly via Groq)
+│   └── transcriber/              # Legacy (STT now handled by backend via Groq)
 │
 ├── dify/              # Dify chatflow exports
 ├── kb/                # 6 knowledge base markdown files (ingested into Dify Dataset)
-├── supabase-gen-code/ # Authoritative SQL migrations (001–018)
-├── docs/              # Architecture, schema, context references
+├── supabase-gen-code/ # Authoritative SQL migrations (001–020)
+├── docs/              # Architecture, schema, solution references
 └── docker-compose.yml
 ```
 
 ---
 
-## Database Overview
+## Current Implementation Status
 
-18 ordered migrations create the full schema. Core tables:
-
-- **`farmers`** — profile, language, location (RLS: own row only)
-- **`farms`** — land parcels with soil/irrigation info
-- **`crop_records`** — active/past crops per farm (one active per farm enforced)
-- **`expense_logs`** — categorised farm expenses
-- **`advisory_sessions` + `advisory_messages`** — full immutable audit trail of every AI interaction
-- **`soil_scans` / `pest_scans`** — ML outputs + S3 image paths (permanent, used for retraining)
-- **`crop_recommendation_requests` / `price_forecast_requests`** — ML query logs
-- **`ref_crops` / `ref_locations` / `ref_knowledge_documents`** — read-only reference tables
-
-> **RLS is enabled on every table.** Farmers can only access their own rows. ML output tables are service-role-insert-only.
+| Component | State |
+|---|---|
+| Frontend (React+Vite) | ✅ Live — 18 screens, PWA-installable |
+| Backend (FastAPI) | ✅ Active — 9 routers, context assembly, STT/TTS |
+| Advisory Pipeline | ✅ Working — FastAPI → Dify → gTTS → response |
+| STT | ✅ Groq `whisper-large-v3-turbo` with timeout |
+| TTS | ✅ gTTS Indian English with timeout |
+| ML Services | ✅ All 4 services rebuilt with trained models |
+| Camera / Soil Scan | ✅ Real image capture → YOLOv8n classification |
+| Crop Recommendation | ✅ Random Forest via ml_insights endpoint |
+| Price Forecasting | ✅ Prophet with rule-based fallback |
+| Plant Disease Detection | ✅ MobileNetV2 Hugging Face classifier |
+| Dify RAG Chatflow | ✅ Chatflow with Knowledge Retrieval (Qdrant) |
+| Weather Integration | ✅ Open-Meteo live weather in context assembly |
+| SakhiNet Community | ✅ Cooperative groups, help requests, shared resources |
+| Admin Portal | ✅ Network graph, ticket management, farmer directory |
 
 ---
 
@@ -247,7 +202,7 @@ The Dify agent **will never**:
 - Provide medical advice (humans or animals)
 - Answer queries outside the agricultural domain
 
-All unsafe queries are deferred to the nearest **Krishi Vigyan Kendra (KVK)** and the deferral is logged (`advisory_messages.was_deferred_to_kvk = true`).
+All unsafe queries are deferred to the nearest **Krishi Vigyan Kendra (KVK)** and the deferral is logged.
 
 ---
 
@@ -263,31 +218,24 @@ All unsafe queries are deferred to the nearest **Krishi Vigyan Kendra (KVK)** an
 
 See `backend/.env.example` and `frontend/.env.example` for full reference.
 
-Key variables:
-- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-- `DIFY_API_URL`, `DIFY_API_KEY`
-- `GROQ_API_KEY` — STT (Whisper) and LLM fallback
-- `QDRANT_URL`, `QDRANT_API_KEY` — for Dify's vector store configuration
+---
+
+## Database Overview
+
+20 ordered migrations create the full schema. Core tables:
+
+- **`farmers`** — profile, language, location (RLS: own row only)
+- **`farms`** — land parcels with soil/irrigation info
+- **`crop_records`** — active/past crops per farm (one active per farm enforced)
+- **`expense_logs`** — categorised farm expenses
+- **`activity_logs`** — farm task timeline
+- **`advisory_sessions` + `advisory_messages`** — full immutable audit trail of every AI interaction
+- **`soil_scans` / `pest_scans`** — ML outputs + S3 image paths (permanent, used for retraining)
+- **`crop_recommendation_requests` / `price_forecast_requests`** — ML query logs
+- **`ref_crops` / `ref_locations` / `ref_knowledge_documents`** — read-only reference tables
+
+> **RLS is enabled on every table.** Farmers can only access their own rows. ML output tables are service-role-insert-only.
 
 ---
 
-## Current Implementation Status
-
-> See `MASTER_IMPLEMENTATION_PLAN.md` for the full task checklist.
-
-| Component | State |
-|---|---|
-| Frontend (React+Vite) | ✅ Live — all screens present |
-| Backend (FastAPI) | ✅ Active — all routers, context assembly, STT/TTS |
-| Advisory Pipeline | ✅ Working — FastAPI → Dify → gTTS → response |
-| STT | ✅ Groq `whisper-large-v3-turbo` with 10s timeout |
-| TTS | ✅ gTTS Indian English with 8s timeout |
-| Dify RAG Chatflow | ⚠️ Partial — workflow built, KB ingestion in progress |
-| Qdrant Vector DB | ⚠️ Configured in `.env` — linked to Dify |
-| ML Services | ⚠️ Stub endpoints — real models in `pavan-drive-ml/` |
-| Camera Screen | ⚠️ File input present — static preview, no real camera |
-| Weather Dashboard | ⚠️ API integrated — dashboard still shows hardcoded values |
-
----
-
-*For architecture detail, schema constraints, RLS rules, and implementation tasks — see [`MASTER_IMPLEMENTATION_PLAN.md`](./MASTER_IMPLEMENTATION_PLAN.md) and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).*
+*For schema detail, RLS rules, and architecture — see [`docs/solution.md`](./docs/solution.md), [`docs/schema.md`](./docs/schema.md), and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).*

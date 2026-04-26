@@ -88,3 +88,28 @@ export async function getPriceForecast({ crop, horizon = 7, token }) {
     if (!resp.ok) throw new Error(`Price forecast error ${resp.status}`);
     return resp.json();
 }
+
+export async function getWeather({ token }) {
+    const url = new URL(`${API_BASE}/api/v1/weather`);
+    const resp = await fetch(url, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    if (!resp.ok) throw new Error(`Weather fetch error ${resp.status}`);
+    return resp.json();
+}
+
+export async function getPublishedBlogs({ token, limit = 2 }) {
+    const url = new URL(`${API_BASE}/api/v1/blog`);
+    url.searchParams.append('limit', limit.toString());
+    const resp = await fetch(url, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    if (!resp.ok) throw new Error(`Blog fetch error ${resp.status}`);
+    return resp.json();
+}

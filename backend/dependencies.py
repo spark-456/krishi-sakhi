@@ -23,3 +23,21 @@ async def get_current_farmer_id(
         return UUID(user.user.id)
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
+async def require_admin(
+    farmer_id: UUID = Depends(get_current_farmer_id),
+    db: Client = Depends(get_supabase),
+) -> UUID:
+    """Dependency: allow only farmers with role = 'admin'."""
+    res = (
+        db.table("farmers")
+        .select("role")
+        .eq("id", str(farmer_id))
+        .single()
+        .execute()
+    )
+    if not res.data or res.data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return farmer_id
+
