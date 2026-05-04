@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Users, Loader2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { API_BASE } from '../lib/apiBase';
 
-const API = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const API = API_BASE;
 
 const CreateCoopGroup = () => {
     const { session } = useAuth();

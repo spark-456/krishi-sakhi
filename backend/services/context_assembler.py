@@ -38,6 +38,13 @@ async def assemble_context(farmer_id: UUID | str, farm_id: str | None, crop_reco
             res = db.table("expense_logs").select("*").eq("farmer_id", str(farmer_id)).execute()
         return res.data
 
+    def get_yields():
+        if crop_record_id:
+            res = db.table("yield_records").select("*").eq("crop_record_id", str(crop_record_id)).execute()
+        else:
+            res = db.table("yield_records").select("*").eq("farmer_id", str(farmer_id)).execute()
+        return res.data
+
     def get_activities():
         if farm_id:
             res = db.table("activity_logs").select("*").eq("farm_id", str(farm_id)).order("date", desc=True).limit(20).execute()
@@ -87,6 +94,7 @@ async def assemble_context(farmer_id: UUID | str, farm_id: str | None, crop_reco
     farms_task = asyncio.to_thread(get_farms)
     crops_task = asyncio.to_thread(get_crops)
     expenses_task = asyncio.to_thread(get_expenses)
+    yields_task = asyncio.to_thread(get_yields)
     activities_task = asyncio.to_thread(get_activities)
     ml_task = asyncio.to_thread(get_ml_insights)
     chat_task = asyncio.to_thread(get_chat_history)
@@ -99,12 +107,25 @@ async def assemble_context(farmer_id: UUID | str, farm_id: str | None, crop_reco
         async def empty_task(): return []
         qdrant_task = asyncio.create_task(empty_task())
 
-    farmer, farms, crops, expenses, activities, ml_insights, qdrant_docs, chat_history, soil_scans = await asyncio.gather(
-        farmer_task, farms_task, crops_task, expenses_task, activities_task, ml_task, qdrant_task, chat_task, soil_scans_task
+    farmer, farms, crops, expenses, yields, activities, ml_insights, qdrant_docs, chat_history, soil_scans = await asyncio.gather(
+        farmer_task, farms_task, crops_task, expenses_task, yields_task, activities_task, ml_task, qdrant_task, chat_task, soil_scans_task
     )
 
     district = farmer.get("district")
-    weather = await get_weather_for_district(district, db) if district else {}  
+    primary_farm = next(
+        (
+            farm for farm in (farms or [])
+            if farm.get("latitude") is not None and farm.get("longitude") is not None
+        ),
+        None,
+    )
+    weather = await get_weather_for_district(
+        district,
+        db,
+        state=farmer.get("state"),
+        fallback_lat=(primary_farm or {}).get("latitude"),
+        fallback_lon=(primary_farm or {}).get("longitude"),
+    ) if district else {}
     live_price_forecasts = await _get_live_price_forecasts_if_needed(query, district, crops, ml_insights)
     live_price_forecast = live_price_forecasts[0] if live_price_forecasts else None
 
@@ -113,6 +134,7 @@ async def assemble_context(farmer_id: UUID | str, farm_id: str | None, crop_reco
         "farms": farms,
         "crops": crops,
         "expenses": expenses,
+        "yields": yields,
         "activities": activities,
         "weather": weather,
         "ml_insights": ml_insights,

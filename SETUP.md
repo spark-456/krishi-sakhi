@@ -50,6 +50,13 @@ Required keys:
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+
+Optional key:
+```env
+# Only set this if your backend is not on port 8000 or lives on a different host.
+# If omitted, the frontend derives the backend host from the current app URL and
+# targets port 8000 automatically. This makes LAN/Wi-Fi IP changes much safer.
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
@@ -107,8 +114,6 @@ curl http://127.0.0.1:800X/health
 ```bash
 cd backend
 .\venv\Scripts\Activate.ps1       # Windows
-source venv/bin/activate           # macOS/Linux
-
 pip install -r requirements.txt
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -229,13 +234,20 @@ To test the application natively on your phone using your laptop's camera and vo
    uvicorn main:app --reload --host 0.0.0.0 --port 8000
    ```
 3. **Frontend Setup:**
-   Update your `frontend/.env` to point to your laptop's IP:
-   ```env
-   VITE_API_BASE_URL=http://192.168.1.3:8000
-   ```
    Start Vite:
    ```bash
    npm run dev
+   ```
+   By default, the frontend now follows the same host that served the app and targets backend port `8000`. That means if your laptop IP changes from one network to another, you usually do **not** need to edit `frontend/.env` again.
+
+   Only set `VITE_API_BASE_URL` if:
+   - your backend runs on a different port
+   - your backend is on another machine
+   - you are intentionally targeting a fixed host or tunnel
+
+   Example optional override:
+   ```env
+   VITE_API_BASE_URL=http://192.168.1.3:8000
    ```
    *(Vite is already configured to expose its port to `0.0.0.0` and run with `@vitejs/plugin-basic-ssl` to enable HTTPS, which is strictly required by browsers for camera and microphone access).*
 4. **Connect via Phone:**

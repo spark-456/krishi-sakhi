@@ -3,8 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Ticket, Plus, ChevronRight, Loader2, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { shouldRefresh, subscribeToDataRefresh } from '../lib/appEvents';
+import { API_BASE } from '../lib/apiBase';
 
-const API = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const API = API_BASE;
 
 const statusBadge = {
     open:           'bg-green-100 text-green-700',

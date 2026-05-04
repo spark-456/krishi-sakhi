@@ -31,6 +31,13 @@ EXPENSE_CATEGORY_KEYWORDS = {
     "equipment": ["tractor", "sprayer", "equipment", "repair", "machine", "rotavator"],
 }
 
+BUYER_TYPE_KEYWORDS = {
+    "mandi": ["mandi", "market yard", "apmc"],
+    "trader": ["trader", "dealer", "commission agent"],
+    "direct": ["direct", "customer", "retail", "local buyer"],
+    "cooperative": ["cooperative", "society", "fpo", "group sale"],
+}
+
 TICKET_CATEGORY_KEYWORDS = {
     "irrigation": ["irrigation", "pump", "borewell", "water", "drip"],
     "pest_disease": ["pest", "disease", "fungus", "leaf spot", "blight", "worm", "insect"],
@@ -47,6 +54,19 @@ HELP_CATEGORY_KEYWORDS = {
     "seeds_needed": ["seed", "seeds", "sapling"],
     "transport_share": ["transport", "truck", "tempo", "mandi"],
     "advice_needed": ["advice", "help", "guidance", "suggestion"],
+}
+
+RESOURCE_TYPE_KEYWORDS = {
+    "equipment": ["tractor", "sprayer", "rotavator", "pump", "machine", "equipment"],
+    "seeds": ["seed", "seeds", "sapling", "fertilizer", "input"],
+    "vehicle": ["vehicle", "pickup", "tempo", "truck", "transport", "bike"],
+    "land": ["storage", "warehouse", "godown", "land", "space", "room"],
+}
+
+ROUTE_DESTINATION_KEYWORDS = {
+    "market": ["market", "mandi", "apmc", "yard"],
+    "storage": ["storage", "warehouse", "cold room", "godown"],
+    "supplier": ["supplier", "dealer", "seed shop", "fertilizer shop", "service center"],
 }
 
 STAGE_KEYWORDS = {
@@ -104,6 +124,56 @@ HELP_REQUEST_CUES = [
     "create help request",
     "help request in group",
     "ask the group",
+]
+
+RESOURCE_CUES = [
+    "share resource",
+    "add resource",
+    "offer resource",
+    "share my",
+    "offer my",
+    "can share my",
+    "my tractor is available",
+    "my sprayer is available",
+    "available for use",
+]
+
+ROUTE_CUES = [
+    "add route",
+    "share route",
+    "common route",
+    "mandi trip",
+    "transport route",
+    "weekly trip",
+    "going to mandi",
+    "going to market",
+]
+
+HELP_INTENT_WORDS = [
+    "need help",
+    "need support",
+    "can someone help",
+    "anyone can help",
+    "looking for help",
+    "looking for support",
+]
+
+RESOURCE_INTENT_WORDS = [
+    "available",
+    "can share",
+    "share my",
+    "offer my",
+    "lend",
+    "for use",
+]
+
+ROUTE_INTENT_WORDS = [
+    "going to",
+    "trip to",
+    "ride to",
+    "travel to",
+    "anyone joining",
+    "anyone wants to join",
 ]
 
 CLAUSE_STARTERS = [
@@ -207,6 +277,8 @@ def _build_state(context: dict[str, Any], db: Client, farmer_id: str) -> dict[st
         "context": {
             "farms": list(context.get("farms", [])),
             "crops": list(context.get("crops", [])),
+            "expenses": list(context.get("expenses", [])),
+            "yields": list(context.get("yields", [])),
         },
         "groups": _load_farmer_groups(db, farmer_id),
         "ref_crops": _load_reference_crop_names(db),
@@ -228,13 +300,29 @@ def _detect_actions_for_clause(clause: dict[str, str], state: dict[str, Any]) ->
     if create_crop:
         actions.append(create_crop)
 
+    yield_sale = _detect_yield_sale(clause, state)
+    if yield_sale:
+        actions.append(yield_sale)
+
     expense = _detect_expense(clause, state)
     if expense:
         actions.append(expense)
 
+    update_expense = _detect_update_expense(clause, state)
+    if update_expense:
+        actions.append(update_expense)
+
     help_request = _detect_help_request(clause, state)
     if help_request:
         actions.append(help_request)
+
+    resource = _detect_resource_share(clause, state)
+    if resource:
+        actions.append(resource)
+
+    route = _detect_route_share(clause, state)
+    if route:
+        actions.append(route)
 
     ticket = _detect_ticket(clause)
     if ticket:
@@ -368,6 +456,8 @@ def _detect_activity(clause: dict[str, str], state: dict[str, Any], create_crop:
 
 def _detect_expense(clause: dict[str, str], state: dict[str, Any]) -> Optional[dict[str, Any]]:
     normalized = clause["normalized"]
+    if any(word in normalized for word in ["update", "change", "edit", "correct"]):
+        return None
     if not any(word in normalized for word in ["spent", "paid", "bought", "purchased", "cost"]):
         return None
 
@@ -383,6 +473,57 @@ def _detect_expense(clause: dict[str, str], state: dict[str, Any]) -> Optional[d
         "farm_name": (farm or {}).get("farm_name"),
         "expense_date": _resolve_relative_date(normalized) or date.today(),
         "notes": clause["text"].strip(),
+    }
+
+
+def _detect_update_expense(clause: dict[str, str], state: dict[str, Any]) -> Optional[dict[str, Any]]:
+    normalized = clause["normalized"]
+    if not any(word in normalized for word in ["update", "change", "edit", "correct"]):
+        return None
+    if not any(word in normalized for word in ["expense", "spent", "paid", "cost", "purchase"]):
+        return None
+
+    amount = _extract_amount(normalized)
+    category = _match_category(normalized, EXPENSE_CATEGORY_KEYWORDS, default="")
+    farm = _resolve_farm(state, normalized, allow_last_created=True)
+    expense_date = _resolve_relative_date(normalized)
+
+    return {
+        "type": "update_expense",
+        "amount_inr": amount,
+        "category": category or None,
+        "farm_id": (farm or {}).get("id"),
+        "expense_date": expense_date,
+        "notes": clause["text"].strip(),
+    }
+
+
+def _detect_yield_sale(clause: dict[str, str], state: dict[str, Any]) -> Optional[dict[str, Any]]:
+    normalized = clause["normalized"]
+    if not any(word in normalized for word in ["harvest", "yield", "yielded", "sold", "sale", "price", "rate", "per kg", "/kg", "kg", "quintal"]):
+        return None
+
+    crop = _resolve_crop(state, normalized, allow_last_created=True)
+    if not crop and not _extract_crop_name(normalized, state["ref_crops"]):
+        return None
+
+    yield_kg = _extract_yield_kg(normalized)
+    sale_price_per_kg = _extract_sale_price_per_kg(normalized)
+    if yield_kg is None and sale_price_per_kg is None and not any(word in normalized for word in ["sold", "sale", "yield", "yielded", "price", "rate"]):
+        return None
+
+    crop_name = (crop or {}).get("crop_name") or _extract_crop_name(normalized, state["ref_crops"])
+    return {
+        "type": "upsert_yield",
+        "mode": "update" if any(word in normalized for word in ["update", "change", "edit", "correct"]) else "upsert",
+        "crop_id": (crop or {}).get("id"),
+        "crop_name": crop_name,
+        "yield_kg": yield_kg,
+        "sale_price_per_kg": sale_price_per_kg,
+        "sale_date": _resolve_relative_date(normalized) or date.today(),
+        "buyer_type": _match_buyer_type(normalized),
+        "notes": clause["text"].strip(),
+        "mark_harvested": any(word in normalized for word in ["harvest", "harvested", "sold", "sale"]),
     }
 
 
@@ -427,7 +568,17 @@ def _detect_crop_update(
 
 def _detect_help_request(clause: dict[str, str], state: dict[str, Any]) -> Optional[dict[str, Any]]:
     normalized = clause["normalized"]
-    if not any(cue in normalized for cue in HELP_REQUEST_CUES):
+    has_explicit_help_signal = any(cue in normalized for cue in HELP_REQUEST_CUES)
+    has_category_signal = any(
+        keyword in normalized
+        for keywords in HELP_CATEGORY_KEYWORDS.values()
+        for keyword in keywords
+    )
+    has_natural_help_signal = bool(state["groups"]) and (
+        any(cue in normalized for cue in HELP_INTENT_WORDS)
+        or (has_category_signal and any(word in normalized for word in ["need", "needed", "looking for", "require"]))
+    )
+    if not (has_explicit_help_signal or has_natural_help_signal):
         return None
 
     group = _resolve_group(state["groups"], normalized)
@@ -444,6 +595,74 @@ def _detect_help_request(clause: dict[str, str], state: dict[str, Any]) -> Optio
         "urgency": urgency,
         "title": _trim_sentence(clause["text"].strip(), 72),
         "description": clause["text"].strip(),
+    }
+
+
+def _detect_resource_share(clause: dict[str, str], state: dict[str, Any]) -> Optional[dict[str, Any]]:
+    normalized = clause["normalized"]
+    has_resource_keyword = any(keyword in normalized for keywords in RESOURCE_TYPE_KEYWORDS.values() for keyword in keywords)
+    has_resource_signal = any(cue in normalized for cue in RESOURCE_CUES) or (
+        bool(state["groups"])
+        and any(word in normalized for word in RESOURCE_INTENT_WORDS)
+        and has_resource_keyword
+    ) or (
+        any(word in normalized for word in ["available", "share", "offer", "lend"])
+        and any(keyword in normalized for keywords in RESOURCE_TYPE_KEYWORDS.values() for keyword in keywords)
+    )
+    if not has_resource_signal:
+        return None
+
+    group = _resolve_group(state["groups"], normalized)
+    resource_type = _match_category(normalized, RESOURCE_TYPE_KEYWORDS, default="other")
+    title = _extract_resource_title(clause["text"], normalized, resource_type)
+    if not title:
+        return None
+
+    quantity = _extract_quantity(normalized) or "1"
+    availability_status = "in_use" if any(word in normalized for word in ["later", "busy", "in use"]) else "available"
+    cost_per_use = _extract_cost_phrase(normalized)
+    return {
+        "type": "create_resource",
+        "group_id": (group or {}).get("id"),
+        "group_name": (group or {}).get("name"),
+        "resource_type": resource_type,
+        "title": title,
+        "description": clause["text"].strip(),
+        "availability_status": availability_status,
+        "quantity": quantity,
+        "cost_per_use": cost_per_use or "Free",
+    }
+
+
+def _detect_route_share(clause: dict[str, str], state: dict[str, Any]) -> Optional[dict[str, Any]]:
+    normalized = clause["normalized"]
+    has_route_signal = any(cue in normalized for cue in ROUTE_CUES) or (
+        bool(state["groups"])
+        and any(cue in normalized for cue in ROUTE_INTENT_WORDS)
+        and any(word in normalized for word in ["market", "mandi", "transport", "warehouse", "storage", "supplier"])
+    ) or (
+        "trip" in normalized and any(word in normalized for word in ["market", "mandi", "transport", "share"])
+    )
+    if not has_route_signal:
+        return None
+
+    group = _resolve_group(state["groups"], normalized)
+    destination_type = _match_category(normalized, ROUTE_DESTINATION_KEYWORDS, default="other")
+    destination_name = _extract_destination_name(clause["text"], normalized)
+    if not destination_name:
+        return None
+
+    frequency = _extract_frequency(normalized) or "On demand"
+    route_name = f"{frequency} trip to {destination_name}"
+    return {
+        "type": "create_route",
+        "group_id": (group or {}).get("id"),
+        "group_name": (group or {}).get("name"),
+        "route_name": route_name,
+        "destination_type": destination_type,
+        "destination_name": destination_name,
+        "frequency": frequency,
+        "notes": clause["text"].strip(),
     }
 
 
@@ -476,16 +695,24 @@ def _execute_action(
         return _execute_update_farm(action, farmer_id, db)
     if action_type == "create_crop":
         return _execute_create_crop(action, farmer_id, state, db)
+    if action_type == "upsert_yield":
+        return _execute_yield(action, farmer_id, state, db)
     if action_type == "log_activity":
         return _execute_activity(action, farmer_id, state, db)
     if action_type == "add_expense":
         return _execute_expense(action, farmer_id, state, db)
+    if action_type == "update_expense":
+        return _execute_update_expense(action, farmer_id, state, db)
     if action_type == "update_crop":
         return _execute_crop_update(action, farmer_id, state, db)
     if action_type == "create_ticket":
         return _execute_ticket(action, farmer_id, db)
     if action_type == "create_help_request":
         return _execute_help_request(action, farmer_id, state["groups"], db)
+    if action_type == "create_resource":
+        return _execute_resource_share(action, farmer_id, state["groups"], db)
+    if action_type == "create_route":
+        return _execute_route_share(action, farmer_id, state["groups"], db)
     return {"type": action_type, "status": "failed", "message": "Unsupported action."}
 
 
@@ -761,6 +988,157 @@ def _execute_expense(action: dict[str, Any], farmer_id: str, state: dict[str, An
     }
 
 
+def _execute_update_expense(action: dict[str, Any], farmer_id: str, state: dict[str, Any], db: Client) -> dict[str, Any]:
+    amount = action.get("amount_inr")
+    if amount is None:
+        return {
+            "type": "update_expense",
+            "status": "needs_follow_up",
+            "message": "Tell me the corrected expense amount in rupees and I will update it.",
+        }
+
+    expense = _find_matching_expense(state, action)
+    if not expense:
+        return {
+            "type": "update_expense",
+            "status": "needs_follow_up",
+            "message": "I could not identify which expense to update. Tell me the category, farm, or date.",
+        }
+
+    result = (
+        db.table("expense_logs")
+        .update({"amount_inr": amount, "notes": action.get("notes") or expense.get("notes")})
+        .eq("id", expense["id"])
+        .eq("farmer_id", farmer_id)
+        .execute()
+    )
+    if not result.data:
+        return {"type": "update_expense", "status": "failed", "message": "I could not update that expense."}
+
+    category = (result.data[0].get("category") or "expense").replace("_", " ")
+    return {
+        "type": "update_expense",
+        "status": "success",
+        "message": f"Updated the {category} expense to Rs. {amount:.0f}.",
+        "refresh_targets": ["finance", "dashboard"],
+        "record_id": expense["id"],
+        "record": result.data[0],
+    }
+
+
+def _execute_yield(action: dict[str, Any], farmer_id: str, state: dict[str, Any], db: Client) -> dict[str, Any]:
+    crop = None
+    if action.get("crop_id"):
+        crop = next((item for item in state["context"]["crops"] if item.get("id") == action["crop_id"]), None)
+    if not crop:
+        crop = _resolve_crop(state, _normalize(action.get("crop_name")), allow_last_created=True)
+    if not crop:
+        return {
+            "type": "upsert_yield",
+            "status": "needs_follow_up",
+            "message": "I need the crop name before I can log or edit the harvest sale details.",
+        }
+
+    existing = next((item for item in state["context"]["yields"] if item.get("crop_record_id") == crop.get("id")), None)
+    update_payload: dict[str, Any] = {}
+    if action.get("yield_kg") is not None:
+        update_payload["yield_kg"] = action["yield_kg"]
+    if action.get("sale_price_per_kg") is not None:
+        update_payload["sale_price_per_kg"] = action["sale_price_per_kg"]
+    if action.get("sale_date"):
+        update_payload["sale_date"] = action["sale_date"].isoformat()
+    if action.get("buyer_type"):
+        update_payload["buyer_type"] = action["buyer_type"]
+    if action.get("notes"):
+        update_payload["notes"] = action["notes"]
+
+    if not update_payload and not action.get("mark_harvested"):
+        return {
+            "type": "upsert_yield",
+            "status": "needs_follow_up",
+            "message": "Tell me the harvest quantity, sale price, or selling date and I will record it.",
+        }
+
+    if existing:
+        if update_payload:
+            result = (
+                db.table("yield_records")
+                .update(update_payload)
+                .eq("id", existing["id"])
+                .eq("farmer_id", farmer_id)
+                .execute()
+            )
+            if not result.data:
+                return {"type": "upsert_yield", "status": "failed", "message": "I could not update that harvest sale entry."}
+            yield_record = result.data[0]
+            message = f"Updated the harvest sale details for {crop.get('crop_name') or 'that crop'}."
+        else:
+            yield_record = existing
+            message = f"Marked {crop.get('crop_name') or 'that crop'} as harvested."
+    else:
+        if not update_payload:
+            return {
+                "type": "upsert_yield",
+                "status": "skipped",
+                "message": f"I marked {crop.get('crop_name') or 'that crop'} as harvested. Add quantity or sale price when you have it.",
+                "refresh_targets": ["farms", "dashboard", "activity"],
+                "record": None,
+                "crop_record": {
+                    **crop,
+                    "status": "harvested",
+                    "growth_stage": "post_harvest",
+                    "actual_harvest_date": (action.get('sale_date') or date.today()).isoformat(),
+                },
+            }
+        payload = {
+            "crop_record_id": crop["id"],
+            "farmer_id": farmer_id,
+            "yield_kg": action.get("yield_kg"),
+            "sale_price_per_kg": action.get("sale_price_per_kg"),
+            "sale_date": action.get("sale_date").isoformat() if action.get("sale_date") else None,
+            "buyer_type": action.get("buyer_type"),
+            "notes": action.get("notes"),
+        }
+        result = db.table("yield_records").insert(payload).execute()
+        if not result.data:
+            return {"type": "upsert_yield", "status": "failed", "message": "I could not save that harvest sale entry."}
+        yield_record = result.data[0]
+        message = f"Logged harvest and sale details for {crop.get('crop_name') or 'that crop'}."
+
+    if action.get("mark_harvested"):
+        crop_update_payload = {
+            "status": "harvested",
+            "growth_stage": "post_harvest",
+            "actual_harvest_date": (action.get("sale_date") or date.today()).isoformat(),
+        }
+        db.table("crop_records").update(crop_update_payload).eq("id", crop["id"]).eq("farmer_id", farmer_id).execute()
+        _create_activity_if_missing(
+            db=db,
+            farmer_id=farmer_id,
+            farm_id=crop.get("farm_id"),
+            crop_name=crop.get("crop_name"),
+            activity_type="harvest",
+            title=f"Harvested {crop.get('crop_name')}",
+            description=action.get("notes") or f"Harvest updated for {crop.get('crop_name')}.",
+            activity_date=action.get("sale_date") or date.today(),
+        )
+
+    return {
+        "type": "upsert_yield",
+        "status": "success",
+        "message": message,
+        "refresh_targets": ["finance", "dashboard", "farms", "activity"],
+        "record_id": yield_record["id"],
+        "record": yield_record,
+        "crop_record": {
+            **crop,
+            "status": "harvested" if action.get("mark_harvested") else crop.get("status"),
+            "growth_stage": "post_harvest" if action.get("mark_harvested") else crop.get("growth_stage"),
+            "actual_harvest_date": (action.get("sale_date") or date.today()).isoformat() if action.get("mark_harvested") else crop.get("actual_harvest_date"),
+        },
+    }
+
+
 def _execute_crop_update(action: dict[str, Any], farmer_id: str, state: dict[str, Any], db: Client) -> dict[str, Any]:
     crop = None
     if action.get("crop_id"):
@@ -876,6 +1254,42 @@ def _execute_ticket(action: dict[str, Any], farmer_id: str, db: Client) -> dict[
     }
 
 
+def _get_farmer_display_name(db: Client, farmer_id: str) -> str:
+    farmer = db.table("farmers").select("full_name").eq("id", farmer_id).single().execute()
+    return (farmer.data or {}).get("full_name") or "A member"
+
+
+def _post_group_message(db: Client, group_id: str, farmer_id: str, message: str, message_type: str) -> None:
+    db.table("group_messages").insert({
+        "group_id": group_id,
+        "farmer_id": farmer_id,
+        "message": message,
+        "message_type": message_type,
+    }).execute()
+
+
+def _group_event_type() -> str:
+    return "alert"
+
+
+def _normalize_resource_type(resource_type: Optional[str]) -> str:
+    value = (resource_type or "").strip().lower()
+    if value in {"equipment", "vehicle", "other"}:
+        return "equipment"
+    if value in {"storage", "land", "space"}:
+        return "storage"
+    if value == "seeds":
+        return "seeds"
+    return "equipment"
+
+
+def _normalize_route_destination_type(destination_type: Optional[str]) -> str:
+    value = (destination_type or "").strip().lower()
+    if value in {"market", "mandi"}:
+        return "mandi"
+    return "bank"
+
+
 def _execute_help_request(action: dict[str, Any], farmer_id: str, groups: list[dict[str, Any]], db: Client) -> dict[str, Any]:
     group_id = action.get("group_id")
     group_name = action.get("group_name")
@@ -925,6 +1339,14 @@ def _execute_help_request(action: dict[str, Any], farmer_id: str, groups: list[d
         return {"type": "create_help_request", "status": "failed", "message": "I could not post that help request."}
 
     request_id = result.data[0]["id"]
+    actor_name = _get_farmer_display_name(db, farmer_id)
+    _post_group_message(
+        db,
+        group_id,
+        farmer_id,
+        f"{actor_name} posted a help request: {action['title']}.",
+        _group_event_type(),
+    )
     create_notifications_for_group_members(
         db,
         group_id=group_id,
@@ -955,6 +1377,154 @@ def _execute_help_request(action: dict[str, Any], farmer_id: str, groups: list[d
     }
 
 
+def _execute_resource_share(action: dict[str, Any], farmer_id: str, groups: list[dict[str, Any]], db: Client) -> dict[str, Any]:
+    group_id = action.get("group_id")
+    group_name = action.get("group_name")
+    if not group_id:
+        if len(groups) == 1:
+            group_id = groups[0]["id"]
+            group_name = groups[0]["name"]
+        else:
+            return {
+                "type": "create_resource",
+                "status": "needs_follow_up",
+                "message": "I can share that resource after you tell me which SakhiNet group to post it in.",
+            }
+
+    existing = (
+        db.table("shared_resources")
+        .select("*")
+        .eq("group_id", group_id)
+        .eq("farmer_id", farmer_id)
+        .eq("title", action["title"])
+        .gte("created_at", (datetime.utcnow() - timedelta(minutes=10)).isoformat())
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        return {
+            "type": "create_resource",
+            "status": "skipped",
+            "message": "That resource is already shared in the group, so I did not post it twice.",
+            "refresh_targets": ["community"],
+            "record": existing.data[0],
+        }
+
+    payload = {
+        "group_id": group_id,
+        "farmer_id": farmer_id,
+        "resource_type": _normalize_resource_type(action["resource_type"]),
+        "title": action["title"],
+        "description": action["description"],
+        "availability_status": action["availability_status"],
+        "quantity": action["quantity"],
+        "cost_per_use": action["cost_per_use"],
+    }
+    result = db.table("shared_resources").insert(payload).execute()
+    if not result.data:
+        return {"type": "create_resource", "status": "failed", "message": "I could not share that resource."}
+
+    actor_name = _get_farmer_display_name(db, farmer_id)
+    _post_group_message(
+        db,
+        group_id,
+        farmer_id,
+        f"{actor_name} shared a resource: {action['title']}.",
+        _group_event_type(),
+    )
+    create_notifications_for_group_members(
+        db,
+        group_id=group_id,
+        exclude_farmer_id=farmer_id,
+        title="New SakhiNet resource shared",
+        message=action["title"],
+        notification_type="community",
+        action_url=f"/community/groups/{group_id}",
+        metadata={"resource_id": result.data[0]["id"], "group_id": group_id},
+    )
+    return {
+        "type": "create_resource",
+        "status": "success",
+        "message": f"Shared {action['title']} in {group_name or 'your group'}.",
+        "refresh_targets": ["community", "notifications"],
+        "record_id": result.data[0]["id"],
+        "record": result.data[0],
+    }
+
+
+def _execute_route_share(action: dict[str, Any], farmer_id: str, groups: list[dict[str, Any]], db: Client) -> dict[str, Any]:
+    group_id = action.get("group_id")
+    group_name = action.get("group_name")
+    if not group_id:
+        if len(groups) == 1:
+            group_id = groups[0]["id"]
+            group_name = groups[0]["name"]
+        else:
+            return {
+                "type": "create_route",
+                "status": "needs_follow_up",
+                "message": "I can add that route after you tell me which SakhiNet group should receive it.",
+            }
+
+    existing = (
+        db.table("common_routes")
+        .select("*")
+        .eq("group_id", group_id)
+        .eq("route_name", action["route_name"])
+        .gte("created_at", (datetime.utcnow() - timedelta(minutes=10)).isoformat())
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        return {
+            "type": "create_route",
+            "status": "skipped",
+            "message": "That shared route already exists, so I did not add it again.",
+            "refresh_targets": ["community"],
+            "record": existing.data[0],
+        }
+
+    payload = {
+        "group_id": group_id,
+        "created_by": farmer_id,
+        "route_name": action["route_name"],
+        "destination_type": _normalize_route_destination_type(action["destination_type"]),
+        "destination_name": action["destination_name"],
+        "frequency": action["frequency"],
+        "notes": action["notes"],
+    }
+    result = db.table("common_routes").insert(payload).execute()
+    if not result.data:
+        return {"type": "create_route", "status": "failed", "message": "I could not add that shared route."}
+
+    actor_name = _get_farmer_display_name(db, farmer_id)
+    _post_group_message(
+        db,
+        group_id,
+        farmer_id,
+        f"{actor_name} shared a route: {action['route_name']}.",
+        _group_event_type(),
+    )
+    create_notifications_for_group_members(
+        db,
+        group_id=group_id,
+        exclude_farmer_id=farmer_id,
+        title="New SakhiNet shared route",
+        message=action["route_name"],
+        notification_type="community",
+        action_url=f"/community/groups/{group_id}",
+        metadata={"route_id": result.data[0]["id"], "group_id": group_id},
+    )
+    return {
+        "type": "create_route",
+        "status": "success",
+        "message": f"Added the route '{action['route_name']}' in {group_name or 'your group'}.",
+        "refresh_targets": ["community", "notifications"],
+        "record_id": result.data[0]["id"],
+        "record": result.data[0],
+    }
+
+
 def _apply_action_result_to_state(action: dict[str, Any], result: dict[str, Any], state: dict[str, Any], farmer_id: str):
     record = result.get("record")
     if result.get("status") not in {"success", "skipped"} or not record:
@@ -972,10 +1542,24 @@ def _apply_action_result_to_state(action: dict[str, Any], result: dict[str, Any]
         _upsert_record(crops, record)
         return
 
+    if action["type"] in {"add_expense", "update_expense"}:
+        _upsert_record(state["context"]["expenses"], record)
+        return
+
+    if action["type"] == "upsert_yield":
+        _upsert_record(state["context"]["yields"], record)
+        crop_record = result.get("crop_record")
+        if crop_record:
+            state["last_created_crop"] = crop_record
+            _upsert_record(state["context"]["crops"], crop_record)
+        return
+
     if action["type"] == "log_activity" and action.get("farm_id") and not state.get("last_created_farm"):
         farm = next((item for item in state["context"]["farms"] if item.get("id") == action["farm_id"]), None)
         if farm:
             state["last_created_farm"] = farm
+    if action["type"] in {"create_resource", "create_route", "create_help_request"}:
+        return
 
 
 def _upsert_record(records: list[dict[str, Any]], record: dict[str, Any]):
@@ -1045,6 +1629,28 @@ def _load_reference_crop_names(db: Client) -> list[str]:
         return []
 
 
+def _find_matching_expense(state: dict[str, Any], action: dict[str, Any]) -> Optional[dict[str, Any]]:
+    expenses = list(state["context"].get("expenses", []))
+    expenses.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+
+    filtered = expenses
+    if action.get("category"):
+        filtered = [item for item in filtered if item.get("category") == action["category"]]
+    if action.get("farm_id"):
+        filtered = [item for item in filtered if item.get("farm_id") == action["farm_id"]]
+    if action.get("expense_date"):
+        iso_date = action["expense_date"].isoformat()
+        filtered = [item for item in filtered if item.get("expense_date") == iso_date]
+
+    if filtered:
+        return filtered[0]
+    if "last" in _normalize(action.get("notes")) and expenses:
+        return expenses[0]
+    if len(expenses) == 1:
+        return expenses[0]
+    return None
+
+
 def _resolve_farm(state: dict[str, Any], normalized: str, allow_last_created: bool = False) -> Optional[dict[str, Any]]:
     farms = state["context"]["farms"]
     for farm in farms:
@@ -1079,6 +1685,13 @@ def _resolve_crop(
     active = [crop for crop in filtered if crop.get("status") == "active"]
     if len(active) == 1:
         return active[0]
+    return None
+
+
+def _match_buyer_type(normalized: str) -> Optional[str]:
+    for buyer_type, keywords in BUYER_TYPE_KEYWORDS.items():
+        if any(keyword in normalized for keyword in keywords):
+            return buyer_type
     return None
 
 
@@ -1155,6 +1768,53 @@ def _extract_crop_name_from_pattern(text: str, normalized: str) -> Optional[str]
     return None
 
 
+def _extract_resource_title(text: str, normalized: str, resource_type: str) -> Optional[str]:
+    patterns = [
+        r"(?:share|offer|add)\s+(?:my\s+)?([a-z0-9][a-z0-9\s\-]{1,40}?)(?=\s+(?:for|to|in|on|with|and|group)\b|$)",
+        r"my\s+([a-z0-9][a-z0-9\s\-]{1,40}?)\s+is\s+available",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, normalized)
+        if match:
+            return _smart_title(match.group(1))
+
+    fallback = {
+        "equipment": "Shared Equipment",
+        "seeds": "Shared Inputs",
+        "vehicle": "Shared Vehicle",
+        "land": "Shared Storage Space",
+        "other": "Shared Resource",
+    }
+    return fallback.get(resource_type)
+
+
+def _extract_destination_name(text: str, normalized: str) -> Optional[str]:
+    patterns = [
+        r"(?:to|for)\s+([a-z0-9][a-z0-9\s\-]{1,40}?)(?=\s+(?:every|weekly|daily|market day|tomorrow|today|group)\b|$)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, normalized)
+        if match:
+            return _smart_title(match.group(1))
+    if "mandi" in normalized:
+        return "Mandi"
+    if "market" in normalized:
+        return "Market"
+    return None
+
+
+def _extract_frequency(normalized: str) -> Optional[str]:
+    if "daily" in normalized or "every day" in normalized:
+        return "Daily"
+    if "weekly" in normalized or "every week" in normalized:
+        return "Weekly"
+    if "market day" in normalized:
+        return "Market day"
+    if "on demand" in normalized:
+        return "On demand"
+    return None
+
+
 def _extract_area_acres(normalized: str) -> Optional[float]:
     match = re.search(r"(\d+(?:\.\d+)?)\s*(?:acre|acres)", normalized)
     if not match:
@@ -1163,6 +1823,13 @@ def _extract_area_acres(normalized: str) -> Optional[float]:
         return float(match.group(1))
     except ValueError:
         return None
+
+
+def _extract_quantity(normalized: str) -> Optional[str]:
+    match = re.search(r"(\d+)\s*(?:people|person|workers|worker|items|item|bags|bag|seats|seat|units|unit)?", normalized)
+    if not match:
+        return None
+    return match.group(1)
 
 
 def _extract_soil_type(normalized: str) -> Optional[str]:
@@ -1216,6 +1883,40 @@ def _extract_amount(normalized: str) -> Optional[float]:
         return float(match.group(1).replace(",", ""))
     except ValueError:
         return None
+
+
+def _extract_cost_phrase(normalized: str) -> Optional[str]:
+    if "fuel only" in normalized:
+        return "Fuel only"
+    if "free" in normalized:
+        return "Free"
+    amount = _extract_amount(normalized)
+    if amount is not None:
+        return f"Rs. {amount:.0f} per use"
+    return None
+
+
+def _extract_yield_kg(normalized: str) -> Optional[float]:
+    match = re.search(r"(\d+(?:\.\d+)?)\s*(kg|kgs|kilograms|quintal|quintals|qtl|qtls)", normalized)
+    if not match:
+        return None
+    value = float(match.group(1))
+    unit = match.group(2)
+    if unit in {"quintal", "quintals", "qtl", "qtls"}:
+        return value * 100
+    return value
+
+
+def _extract_sale_price_per_kg(normalized: str) -> Optional[float]:
+    patterns = [
+        r"(?:price|rate|sold at|at|for)\s*(?:rs\.?|rupees|inr|₹)?\s*(\d+(?:\.\d+)?)\s*(?:per\s*(?:kg|kilogram)|/\s*kg)?",
+        r"(?:rs\.?|rupees|inr|₹)\s*(\d+(?:\.\d+)?)\s*(?:per\s*(?:kg|kilogram)|/\s*kg)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, normalized)
+        if match:
+            return float(match.group(1))
+    return None
 
 
 def _match_category(normalized: str, mapping: dict[str, list[str]], default: str) -> str:

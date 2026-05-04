@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileText, Plus, Loader2, Eye, EyeOff, Trash2, Sparkles } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { API_BASE } from '../../lib/apiBase';
 
-const API = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const API = API_BASE;
 
 const categoryStyle = {
     government_scheme: 'bg-blue-50 text-blue-700', market_update: 'bg-green-50 text-green-700',

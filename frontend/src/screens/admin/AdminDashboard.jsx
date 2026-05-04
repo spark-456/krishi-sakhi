@@ -9,8 +9,9 @@ import {
     ChevronRight, Loader2, BarChart3, CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { API_BASE } from '../../lib/apiBase';
 
-const API = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const API = API_BASE;
 
 const AdminDashboard = () => {
     const { session } = useAuth();

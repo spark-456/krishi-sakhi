@@ -47,9 +47,16 @@ const PhoneNumberLogin = () => {
         setIsVerifying(true);
         setError('');
 
+        // 0. Enforce Universal OTP for demo
+        if (otp.join('') !== '123456') {
+            setError('Invalid OTP. For demo purposes, use 123456.');
+            setIsVerifying(false);
+            return;
+        }
+
         try {
             // Transform phone number into a mock email for Supabase Auth
-            const mockEmail = `${phone}@ks.com`;
+            const mockEmail = `+91${phone}@ks.com`;
             const fixedPassword = 'password123456';
 
             // 1. Try to sign in first
@@ -76,10 +83,10 @@ const PhoneNumberLogin = () => {
                 return;
             }
 
-            // Check onboarding status in the farmers table
+            // Check onboarding status and role in the farmers table
             const { data: farmerData, error: farmerError } = await supabase
                 .from('farmers')
-                .select('onboarding_complete, full_name')
+                .select('onboarding_complete, full_name, role')
                 .eq('id', authData.user.id)
                 .single();
 
@@ -89,7 +96,9 @@ const PhoneNumberLogin = () => {
                 return;
             }
 
-            if (farmerData.onboarding_complete) {
+            if (farmerData.role === 'admin') {
+                navigate('/admin', { replace: true });
+            } else if (farmerData.onboarding_complete) {
                 navigate('/dashboard', { replace: true });
             } else {
                 navigate('/register', { replace: true });

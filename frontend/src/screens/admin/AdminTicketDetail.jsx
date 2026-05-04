@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, User, AlertCircle, Clock, CheckCircle, Ticket, Phone } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { API_BASE } from '../../lib/apiBase';
 
-const API = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const API = API_BASE;
 
 const AdminTicketDetail = () => {
     const { ticketId } = useParams();

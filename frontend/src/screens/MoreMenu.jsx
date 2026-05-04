@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
 import {
     Clock, IndianRupee, Camera, User, Ticket, BookOpen,
-    ChevronRight, Sprout, ShieldAlert, Bell
+    ChevronRight, Sprout, ShieldAlert, Bell, Home, Users
 } from 'lucide-react';
 
 const MoreMenu = () => {
@@ -24,6 +24,14 @@ const MoreMenu = () => {
     }, [user?.id]);
 
     const menuItems = [
+        {
+            section: 'Quick Access',
+            items: [
+                { label: 'Today View', desc: 'Daily briefing & priorities', icon: Home, path: '/dashboard', color: 'bg-emerald-50', iconColor: 'text-emerald-600' },
+                { label: 'My Farms', desc: 'Crops, stages, and season view', icon: Sprout, path: '/farms', color: 'bg-green-50', iconColor: 'text-green-600' },
+                { label: 'SakhiNet', desc: 'Group help, routes, and sharing', icon: Users, path: '/community', color: 'bg-blue-50', iconColor: 'text-blue-600' },
+            ],
+        },
         {
             section: 'Farm Tools',
             items: [

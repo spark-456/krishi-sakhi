@@ -30,7 +30,13 @@ build/
 .DS_Store
 Thumbs.db
 
-#Folder
-.vscode
-.agent
-.pavan-drive-ml
+# AI Agent Artifacts
+.agent/
+.agent-local/
+TASK.md
+implementation_plan.md
+walkthrough.md
+scratch/
+
+# Local/Misc
+pavan-drive-ml/

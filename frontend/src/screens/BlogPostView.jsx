@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Eye } from 'lucide-react';
+import { ArrowLeft, Loader2, Eye, MessageSquarePlus, TrendingUp, Camera, Users } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { API_BASE } from '../lib/apiBase';
 
-const API = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const API = API_BASE;
 
 const categoryStyle = {
     government_scheme: 'bg-blue-50 text-blue-700',
@@ -12,6 +13,19 @@ const categoryStyle = {
     weather_advisory:  'bg-sky-50 text-sky-700',
     best_practice:     'bg-emerald-50 text-emerald-700',
     announcement:      'bg-purple-50 text-purple-700',
+};
+
+const resolveAction = (post) => {
+    if (post?.category === 'market_update') {
+        return { label: 'Open Finance', route: '/finance', icon: TrendingUp };
+    }
+    if (post?.category === 'pest_alert') {
+        return { label: 'Scan Crop', route: '/camera', icon: Camera };
+    }
+    if (post?.category === 'announcement') {
+        return { label: 'Open Community', route: '/community', icon: Users };
+    }
+    return { label: 'Ask Sakhi', route: '/assistant', icon: MessageSquarePlus };
 };
 
 const BlogPostView = () => {
@@ -61,6 +75,26 @@ const BlogPostView = () => {
                             </div>
                             <div className="mt-5 prose prose-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
                                 {post.content}
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 mt-6">
+                                <button
+                                    onClick={() => navigate('/assistant', {
+                                        state: {
+                                            prefillMessage: `I read this update: "${post.title}". Explain what matters for my crops and give me practical next steps.`,
+                                        }
+                                    })}
+                                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white"
+                                >
+                                    <MessageSquarePlus className="w-4 h-4" />
+                                    Ask Sakhi
+                                </button>
+                                <button
+                                    onClick={() => navigate(resolveAction(post).route)}
+                                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-700 border border-slate-200"
+                                >
+                                    {React.createElement(resolveAction(post).icon, { className: 'w-4 h-4' })}
+                                    {resolveAction(post).label}
+                                </button>
                             </div>
                             {post.tags?.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mt-6">

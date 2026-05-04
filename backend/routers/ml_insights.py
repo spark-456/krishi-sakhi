@@ -5,7 +5,7 @@ import httpx
 import logging
 
 from dependencies import get_supabase_service, get_current_farmer_id
-from routers.weather import get_weather_for_district
+from services.weather_client import get_weather_for_district
 from config import settings
 from services.price_forecast_fallback import forecast_from_local_price_csv, normalize_price_forecast_units
 

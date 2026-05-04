@@ -51,6 +51,10 @@ class HelpRequestCreate(BaseModel):
 class HelpResponse(BaseModel):
     message: str
 
+class HelpDecision(BaseModel):
+    decision: str
+    note: Optional[str] = None
+
 class MessagePost(BaseModel):
     message: str
     message_type: str = "text"
@@ -62,6 +66,14 @@ class RouteCreate(BaseModel):
     frequency: Optional[str] = None
     notes: Optional[str] = None
 
+class ResourceDecision(BaseModel):
+    decision: str
+    note: Optional[str] = None
+
+class RouteDecision(BaseModel):
+    decision: str
+    note: Optional[str] = None
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -71,6 +83,82 @@ def _assert_member(db: Client, group_id: str, farmer_id: str):
     res = db.table("cooperative_memberships").select("id").eq("group_id", group_id).eq("farmer_id", farmer_id).execute()
     if not res.data:
         raise HTTPException(403, "You are not a member of this group")
+
+
+def _get_farmer_name(db: Client, farmer_id: str) -> str:
+    farmer = db.table("farmers").select("full_name").eq("id", farmer_id).single().execute()
+    return (farmer.data or {}).get("full_name") or "A member"
+
+
+def _post_group_event(
+    db: Client,
+    *,
+    group_id: str,
+    farmer_id: str,
+    message: str,
+    message_type: str,
+):
+    db.table("group_messages").insert({
+        "group_id": group_id,
+        "farmer_id": farmer_id,
+        "message": message,
+        "message_type": message_type,
+    }).execute()
+
+
+def _build_group_note(note: Optional[str]) -> str:
+    clean = (note or "").strip()
+    return f" Note: {clean}" if clean else ""
+
+
+def _resource_decision_copy(decision: str) -> str:
+    if decision == "interested":
+        return "is interested in using this resource."
+    if decision == "can_coordinate":
+        return "can help coordinate this resource."
+    if decision == "pass":
+        return "does not need this resource right now."
+    return "responded to this resource post."
+
+
+def _route_decision_copy(decision: str) -> str:
+    if decision == "join":
+        return "can join this route."
+    if decision == "can_coordinate":
+        return "can help coordinate this route."
+    if decision == "pass":
+        return "cannot join this route right now."
+    return "responded to this route post."
+
+
+def _help_decision_copy(decision: str) -> str:
+    if decision == "can_help":
+        return "I can help with this request."
+    if decision == "cannot_help":
+        return "I cannot help with this request right now."
+    return "Responded to this request."
+
+
+def _event_message_type() -> str:
+    return "alert"
+
+
+def _normalize_resource_type(resource_type: Optional[str]) -> str:
+    value = (resource_type or "").strip().lower()
+    if value in {"equipment", "vehicle", "other"}:
+        return "equipment"
+    if value in {"storage", "land", "space"}:
+        return "storage"
+    if value == "seeds":
+        return "seeds"
+    return "equipment"
+
+
+def _normalize_route_destination_type(destination_type: Optional[str]) -> str:
+    value = (destination_type or "").strip().lower()
+    if value in {"market", "mandi"}:
+        return "mandi"
+    return "bank"
 
 
 # ---------------------------------------------------------------------------
@@ -215,11 +303,22 @@ async def add_resource(
     db: Client = Depends(get_supabase),
 ):
     _assert_member(db, group_id, str(farmer_id))
+    resource_payload = body.dict()
+    resource_payload["resource_type"] = _normalize_resource_type(resource_payload.get("resource_type"))
     res = db.table("shared_resources").insert({
         "group_id": group_id,
         "farmer_id": str(farmer_id),
-        **body.dict(),
+        **resource_payload,
     }).execute()
+    if res.data:
+        actor_name = _get_farmer_name(db, str(farmer_id))
+        _post_group_event(
+            db,
+            group_id=group_id,
+            farmer_id=str(farmer_id),
+            message=f"{actor_name} shared a resource: {body.title}.",
+            message_type=_event_message_type(),
+        )
     return res.data[0] if res.data else {}
 
 
@@ -260,7 +359,7 @@ async def list_help_requests(
 ):
     _assert_member(db, group_id, str(farmer_id))
     q = db.table("help_requests").select(
-        "*, farmers(full_name, village)"
+        "*, farmers!help_requests_farmer_id_fkey(full_name, village)"
     ).eq("group_id", group_id)
     if status:
         q = q.eq("status", status)
@@ -284,6 +383,14 @@ async def create_help_request(
     res = db.table("help_requests").insert(data).execute()
     if res.data:
         help_request = res.data[0]
+        actor_name = _get_farmer_name(db, str(farmer_id))
+        _post_group_event(
+            db,
+            group_id=group_id,
+            farmer_id=str(farmer_id),
+            message=f"{actor_name} posted a help request: {help_request.get('title', 'Need help')}.",
+            message_type=_event_message_type(),
+        )
         create_notifications_for_group_members(
             db,
             group_id=group_id,
@@ -305,11 +412,23 @@ async def update_help_request(
     farmer_id: UUID = Depends(get_current_farmer_id),
     db: Client = Depends(get_supabase),
 ):
+    request_res = db.table("help_requests").select("title, farmer_id").eq("id", request_id).single().execute()
+    if not request_res.data:
+        raise HTTPException(404, "Help request not found")
     update_data = {"status": status}
     if status == "resolved":
         update_data["resolved_by"] = str(farmer_id)
         update_data["resolved_at"] = datetime.utcnow().isoformat()
     res = db.table("help_requests").update(update_data).eq("id", request_id).execute()
+    if res.data:
+        actor_name = _get_farmer_name(db, str(farmer_id))
+        _post_group_event(
+            db,
+            group_id=group_id,
+            farmer_id=str(farmer_id),
+            message=f"{actor_name} marked help request '{request_res.data.get('title', 'request')}' as {status.replace('_', ' ')}.",
+            message_type=_event_message_type(),
+        )
     return res.data[0] if res.data else {}
 
 
@@ -342,6 +461,15 @@ async def add_response(
         "farmer_id": str(farmer_id),
         "message": body.message,
     }).execute()
+    if res.data:
+        actor_name = _get_farmer_name(db, str(farmer_id))
+        _post_group_event(
+            db,
+            group_id=group_id,
+            farmer_id=str(farmer_id),
+            message=f"{actor_name} replied to help request '{request_detail.data.get('title', 'request')}': {body.message}",
+            message_type=_event_message_type(),
+        )
     if request_detail.data and request_detail.data.get("farmer_id") != str(farmer_id):
         create_notification(
             db,
@@ -353,6 +481,53 @@ async def add_response(
             metadata={"request_id": request_id, "group_id": group_id},
         )
     return res.data[0] if res.data else {}
+
+
+@router.post("/groups/{group_id}/help-requests/{request_id}/decision")
+async def add_help_decision(
+    group_id: str,
+    request_id: str,
+    body: HelpDecision,
+    farmer_id: UUID = Depends(get_current_farmer_id),
+    db: Client = Depends(get_supabase),
+):
+    _assert_member(db, group_id, str(farmer_id))
+    request_detail = db.table("help_requests").select("id, farmer_id, title, status").eq("id", request_id).single().execute()
+    if not request_detail.data:
+        raise HTTPException(404, "Help request not found")
+    if request_detail.data.get("farmer_id") == str(farmer_id):
+        raise HTTPException(400, "You cannot respond to your own request")
+
+    message = f"{_help_decision_copy(body.decision)}{_build_group_note(body.note)}".strip()
+    res = db.table("help_request_responses").insert({
+        "request_id": request_id,
+        "farmer_id": str(farmer_id),
+        "message": message,
+    }).execute()
+    if not res.data:
+        raise HTTPException(500, "Failed to record help response")
+
+    if body.decision == "can_help" and request_detail.data.get("status") == "open":
+        db.table("help_requests").update({"status": "in_progress"}).eq("id", request_id).execute()
+
+    actor_name = _get_farmer_name(db, str(farmer_id))
+    _post_group_event(
+        db,
+        group_id=group_id,
+        farmer_id=str(farmer_id),
+        message=f"{actor_name} responded to help request '{request_detail.data.get('title', 'request')}': {message}",
+        message_type=_event_message_type(),
+    )
+    create_notification(
+        db,
+        farmer_id=request_detail.data["farmer_id"],
+        title="New response to your help request",
+        message=request_detail.data.get("title", "A member replied to your request."),
+        notification_type="community",
+        action_url=f"/community/groups/{group_id}",
+        metadata={"request_id": request_id, "group_id": group_id},
+    )
+    return {"ok": True, "message": message}
 
 
 # ---------------------------------------------------------------------------
@@ -415,12 +590,95 @@ async def add_route(
     db: Client = Depends(get_supabase),
 ):
     _assert_member(db, group_id, str(farmer_id))
+    route_payload = body.dict()
+    route_payload["destination_type"] = _normalize_route_destination_type(route_payload.get("destination_type"))
     res = db.table("common_routes").insert({
         "group_id": group_id,
         "created_by": str(farmer_id),
-        **body.dict(),
+        **route_payload,
     }).execute()
+    if res.data:
+        actor_name = _get_farmer_name(db, str(farmer_id))
+        _post_group_event(
+            db,
+            group_id=group_id,
+            farmer_id=str(farmer_id),
+            message=f"{actor_name} shared a route: {body.route_name}.",
+            message_type=_event_message_type(),
+        )
     return res.data[0] if res.data else {}
+
+
+@router.post("/groups/{group_id}/resources/{resource_id}/decision")
+async def decide_on_resource(
+    group_id: str,
+    resource_id: str,
+    body: ResourceDecision,
+    farmer_id: UUID = Depends(get_current_farmer_id),
+    db: Client = Depends(get_supabase),
+):
+    _assert_member(db, group_id, str(farmer_id))
+    resource = db.table("shared_resources").select("id, farmer_id, title").eq("id", resource_id).single().execute()
+    if not resource.data:
+        raise HTTPException(404, "Resource not found")
+    if resource.data.get("farmer_id") == str(farmer_id):
+        raise HTTPException(400, "You cannot review your own resource post")
+
+    actor_name = _get_farmer_name(db, str(farmer_id))
+    message = f"{actor_name} {_resource_decision_copy(body.decision)} Resource: {resource.data.get('title', 'Shared resource')}.{_build_group_note(body.note)}"
+    _post_group_event(
+        db,
+        group_id=group_id,
+        farmer_id=str(farmer_id),
+        message=message,
+        message_type=_event_message_type(),
+    )
+    create_notification(
+        db,
+        farmer_id=resource.data["farmer_id"],
+        title="New response to your shared resource",
+        message=resource.data.get("title", "A member responded to your resource."),
+        notification_type="community",
+        action_url=f"/community/groups/{group_id}",
+        metadata={"resource_id": resource_id, "group_id": group_id},
+    )
+    return {"ok": True, "message": message}
+
+
+@router.post("/groups/{group_id}/routes/{route_id}/decision")
+async def decide_on_route(
+    group_id: str,
+    route_id: str,
+    body: RouteDecision,
+    farmer_id: UUID = Depends(get_current_farmer_id),
+    db: Client = Depends(get_supabase),
+):
+    _assert_member(db, group_id, str(farmer_id))
+    route = db.table("common_routes").select("id, created_by, route_name").eq("id", route_id).single().execute()
+    if not route.data:
+        raise HTTPException(404, "Route not found")
+    if route.data.get("created_by") == str(farmer_id):
+        raise HTTPException(400, "You cannot review your own route post")
+
+    actor_name = _get_farmer_name(db, str(farmer_id))
+    message = f"{actor_name} {_route_decision_copy(body.decision)} Route: {route.data.get('route_name', 'Shared route')}.{_build_group_note(body.note)}"
+    _post_group_event(
+        db,
+        group_id=group_id,
+        farmer_id=str(farmer_id),
+        message=message,
+        message_type=_event_message_type(),
+    )
+    create_notification(
+        db,
+        farmer_id=route.data["created_by"],
+        title="New response to your shared route",
+        message=route.data.get("route_name", "A member responded to your route."),
+        notification_type="community",
+        action_url=f"/community/groups/{group_id}",
+        metadata={"route_id": route_id, "group_id": group_id},
+    )
+    return {"ok": True, "message": message}
 
 
 # ---------------------------------------------------------------------------

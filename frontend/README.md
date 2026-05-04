@@ -22,6 +22,14 @@ VITE_DIFY_API_URL=http://localhost/v1
 VITE_DIFY_CHATBOT_API_KEY=...
 ```
 
+`VITE_API_BASE_URL` is optional. If you omit it, the frontend derives the backend host from the current browser URL and targets port `8000`. This is the recommended local/LAN setup because it keeps working when your laptop IP changes between networks.
+
+If you need a fixed override, add:
+
+```bash
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
 ## Current Integration Reality
 
 - The frontend talks exclusively to the FastAPI backend located in `../backend`.

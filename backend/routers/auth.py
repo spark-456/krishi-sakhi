@@ -11,7 +11,9 @@ class RegisterRequest(BaseModel):
 
 @router.post("/register")
 async def register_user(req: RegisterRequest, db: Client = Depends(get_supabase_service)):
-    email = f"{req.phone}@ks.com"
+    # Standardize to include country code for consistency with demo data
+    phone_clean = req.phone.replace("+91", "")
+    email = f"+91{phone_clean}@ks.com"
     try:
         # Create an auto-confirmed user bypassing all email limits
         user = db.auth.admin.create_user({

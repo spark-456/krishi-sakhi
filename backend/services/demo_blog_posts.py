@@ -86,6 +86,104 @@ DEMO_BLOG_POSTS = [
         "target_state": "Telangana",
         "cover_image_url": None,
     },
+    {
+        "title": "Best Practice: Separate Input Planning for Main Crop and Border Crop",
+        "summary": "Mixed and border planting can improve resilience, but only if farmers track input use separately and avoid blanket application.",
+        "content": (
+            "When a farm uses a main crop with a border crop or intercrop, inputs should be planned according to crop need rather than applied uniformly across the full field.\n\n"
+            "Separate records for seed, fertilizer, labour, and irrigation help farmers understand which part of the field is driving cost and where returns are strongest.\n\n"
+            "Even a simple handwritten or digital split by plot section improves decision quality during the next season."
+        ),
+        "category": "best_practice",
+        "tags": ["intercropping", "planning", "input_management"],
+        "target_district": None,
+        "target_state": "Telangana",
+        "cover_image_url": None,
+    },
+    {
+        "title": "Weather Advisory: Strong Winds Can Reduce Spray Efficiency Even Without Rain",
+        "summary": "Spray decisions should consider wind speed as well as rainfall. Drift losses can be significant on exposed plots.",
+        "content": (
+            "Farmers often check only for rain before spraying, but strong winds can reduce application quality and increase chemical drift to non-target areas.\n\n"
+            "When wind conditions are unstable, early-morning or calmer evening windows are usually safer for field operations than midday application.\n\n"
+            "Recording weather conditions alongside the spray event improves future field planning and cost control."
+        ),
+        "category": "weather_advisory",
+        "tags": ["wind", "spraying", "field_operations"],
+        "target_district": None,
+        "target_state": "Telangana",
+        "cover_image_url": None,
+    },
+    {
+        "title": "Market Update: Track Transport and Labour Costs Alongside Sale Price",
+        "summary": "A higher selling rate is not always the better decision if loading, transport, and handling costs have risen sharply.",
+        "content": (
+            "Farmers comparing selling options should look beyond the mandi rate and account for loading, unloading, transport, packaging, and labour costs.\n\n"
+            "A nearby buyer offering a slightly lower price may still yield a better net result if handling losses and travel expenses are lower.\n\n"
+            "Farm-level cost tracking helps make this comparison practical instead of relying on price alone."
+        ),
+        "category": "market_update",
+        "tags": ["selling", "transport", "net_returns"],
+        "target_district": None,
+        "target_state": "Telangana",
+        "cover_image_url": None,
+    },
+    {
+        "title": "Pest Alert: Moisture Stress and Pest Pressure Often Appear Together",
+        "summary": "Fields under uneven irrigation or prolonged dryness should be watched closely because stressed plants are more vulnerable to attack.",
+        "content": (
+            "Crops under moisture stress often show weaker recovery and may become more vulnerable to pest pressure during hot intervals.\n\n"
+            "Farmers should check patchy areas, field edges, and recently stressed sections first when scouting for pest damage.\n\n"
+            "Irrigation records, rainfall conditions, and scouting notes together provide better decision support than visual symptoms alone."
+        ),
+        "category": "pest_alert",
+        "tags": ["moisture_stress", "scouting", "crop_health"],
+        "target_district": None,
+        "target_state": "Telangana",
+        "cover_image_url": None,
+    },
+    {
+        "title": "Government Update: Verify Bank Linkage Before Subsidy or Insurance Submission",
+        "summary": "Application rejection often happens because the bank account, identity details, and mobile number are not aligned.",
+        "content": (
+            "Before applying for subsidy or insurance support, farmers should verify that their bank linkage, identity details, and registered mobile number are consistent across records.\n\n"
+            "Corrections made after the submission window opens often create delays that are difficult to resolve locally.\n\n"
+            "A short pre-check at the village or mandal level can prevent avoidable application failure."
+        ),
+        "category": "government_scheme",
+        "tags": ["bank_linkage", "insurance", "application_readiness"],
+        "target_district": None,
+        "target_state": "Telangana",
+        "cover_image_url": None,
+    },
+    {
+        "title": "Announcement: Use AskSakhi Activity and Expense Logs to Build a Season Record",
+        "summary": "Consistent logging improves visibility into farm decisions and makes advisory suggestions more context-aware over time.",
+        "content": (
+            "Farmers are encouraged to log major activities, expenses, and crop-stage changes in the app throughout the season instead of only at harvest time.\n\n"
+            "A complete season record helps identify high-cost windows, repeated field issues, and the timing of key operations.\n\n"
+            "It also improves the quality of AskSakhi recommendations because the advisory layer can work from actual farm history."
+        ),
+        "category": "announcement",
+        "tags": ["asksakhi", "recordkeeping", "digital_advisory"],
+        "target_district": None,
+        "target_state": "Telangana",
+        "cover_image_url": None,
+    },
+    {
+        "title": "Training Note: Review Input Stocks Before the Peak Sowing Window",
+        "summary": "Seed, fertilizer, and protective-input shortages during the sowing period force rushed purchases and weaker decisions.",
+        "content": (
+            "Before the peak sowing period begins, farmers should review available seed, nutrient, and protective-input stocks and estimate shortfalls early.\n\n"
+            "Late purchase during high-demand weeks often increases cost and reduces choice in product quality or source.\n\n"
+            "Basic pre-sowing budgeting also helps align labour and transport planning with actual field needs."
+        ),
+        "category": "training",
+        "tags": ["sowing", "inventory", "input_planning"],
+        "target_district": None,
+        "target_state": "Telangana",
+        "cover_image_url": None,
+    },
 ]
 
 

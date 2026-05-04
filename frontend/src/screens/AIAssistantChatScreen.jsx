@@ -5,7 +5,7 @@
  * Fixed: Input positioned correctly above BottomNav via ProtectedLayout.
  */
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Mic, Image as ImageIcon, Sparkles, User, RotateCcw, Loader2 } from 'lucide-react';
+import { Send, Mic, Image as ImageIcon, Sparkles, User, RotateCcw, Loader2, ShieldCheck, CircleAlert } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { askAdvisory, createAdvisorySession, sendVoiceMessage } from '../lib/backendClient';
 import { useAuth } from '../hooks/useAuth';
@@ -15,6 +15,12 @@ import { useChat } from '../contexts/ChatContext';
 import { dispatchDataRefresh } from '../lib/appEvents';
 
 const CONVERSATION_KEY = (id) => `ks_chat_session_${id}`;
+const QUICK_ACTIONS = [
+    'Ask my group for labour help tomorrow morning',
+    'Share my tractor in the group as available for fuel only',
+    'Add a weekly mandi route for my group',
+    'I harvested cotton today and sold 320 kg at Rs 71 per kg',
+];
 
 const AIAssistantChatScreen = () => {
     const { user, session } = useAuth();
@@ -25,14 +31,24 @@ const AIAssistantChatScreen = () => {
 
     // Check if we arrived from the soil scanner with a result
     const incomingSoilResult = location.state?.soilScanResult || null;
+    const incomingPestResult = location.state?.pestScanResult || null;
+    const prefillMessage = location.state?.prefillMessage || '';
+    const autoSendPrefill = location.state?.autoSendPrefill || false;
 
-    const { messages, setMessages, sessionId, setSessionId, injectSoilResult, handleNewChat } = useChat();
+    const { messages, setMessages, sessionId, setSessionId, injectSoilResult, injectPestResult, handleNewChat } = useChat();
+    const autoSentRef = useRef(false);
 
     useEffect(() => {
         if (incomingSoilResult) {
             injectSoilResult(incomingSoilResult);
         }
     }, [incomingSoilResult]);
+
+    useEffect(() => {
+        if (incomingPestResult) {
+            injectPestResult(incomingPestResult);
+        }
+    }, [incomingPestResult]);
 
     const [input, setInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
@@ -59,6 +75,12 @@ const AIAssistantChatScreen = () => {
     };
 
     useEffect(() => { scrollToBottom(); }, [messages, isTyping]);
+
+    useEffect(() => {
+        if (prefillMessage) {
+            setInput(prefillMessage);
+        }
+    }, [prefillMessage]);
 
     /**
      * Load farmer context mostly for the UI badge.
@@ -122,6 +144,7 @@ const AIAssistantChatScreen = () => {
                 sender: 'ai',
                 text: result.response_text,
                 audio_b64: result.audio_b64,
+                trustSignals: result.trust_signals || null,
                 isNew: true,
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
@@ -186,6 +209,7 @@ const AIAssistantChatScreen = () => {
                     sender: 'ai',
                     text: data.answer,
                     audio_b64: data.audio_response_b64,
+                    trustSignals: data.trust_signals || null,
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 }]);
                 dispatchDataRefresh(data.refresh_targets || []);
@@ -211,6 +235,12 @@ const AIAssistantChatScreen = () => {
             setIsTyping(false);
         }
     };
+
+    useEffect(() => {
+        if (!autoSendPrefill || !prefillMessage || isTyping || autoSentRef.current) return;
+        autoSentRef.current = true;
+        handleSend(prefillMessage);
+    }, [autoSendPrefill, prefillMessage, isTyping, sessionId]);
 
     const onNewChatClick = () => {
         handleNewChat();
@@ -270,6 +300,25 @@ const AIAssistantChatScreen = () => {
                     </span>
                 </div>
 
+                {messages.length === 0 && (
+                    <div className="bg-white border border-slate-100 rounded-3xl p-4 shadow-sm">
+                        <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Try Ask Sakhi for actions</p>
+                        <div className="flex flex-wrap gap-2 mt-3">
+                            {QUICK_ACTIONS.map((item) => (
+                                <button
+                                    key={item}
+                                    type="button"
+                                    onClick={() => handleSend(item)}
+                                    disabled={isTyping}
+                                    className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                                >
+                                    {item}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {messages.map((msg) => (
                     <div key={msg.id} className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
                         <div className={`flex gap-2 max-w-[85%] ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -287,6 +336,35 @@ const AIAssistantChatScreen = () => {
                                 {msg.sender === 'ai' && msg.audio_b64 && (
                                     <div className="mt-2">
                                         <audio controls autoPlay={msg.isNew} onEnded={() => { msg.isNew = false; }} src={`data:audio/mpeg;base64,${msg.audio_b64}`} className="h-8 w-full max-w-[200px]" />
+                                    </div>
+                                )}
+                                {msg.sender === 'ai' && msg.trustSignals && (
+                                    <div className="mt-3 rounded-2xl bg-slate-50 border border-slate-100 p-3">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                                Why this answer
+                                            </div>
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                                msg.trustSignals.confidence === 'high'
+                                                    ? 'bg-emerald-100 text-emerald-700'
+                                                    : msg.trustSignals.confidence === 'medium'
+                                                        ? 'bg-amber-100 text-amber-700'
+                                                        : 'bg-rose-100 text-rose-700'
+                                            }`}>
+                                                {msg.trustSignals.confidence} confidence
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-slate-600 mt-2 leading-relaxed">{msg.trustSignals.reason}</p>
+                                        {msg.trustSignals.sources?.length > 0 && (
+                                            <div className="flex flex-wrap gap-1.5 mt-2">
+                                                {msg.trustSignals.sources.map((source) => (
+                                                    <span key={source} className="text-[10px] font-semibold px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-500">
+                                                        {source}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                                 <div className={`text-[10px] mt-1.5 opacity-70 font-medium ${msg.sender === 'user' ? 'text-right text-green-100' : 'text-slate-400'}`}>
@@ -328,6 +406,34 @@ const AIAssistantChatScreen = () => {
 
             {/* Input */}
             <div className="flex-shrink-0 p-3 bg-white border-t border-slate-100">
+                {(incomingPestResult || incomingSoilResult) && (
+                    <div className="mb-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 flex items-start gap-2">
+                        <CircleAlert className="w-4 h-4 text-emerald-700 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-emerald-800 leading-relaxed">
+                            Scan context is attached in this chat. Ask Sakhi about severity, next steps, or raise a support ticket from here.
+                        </p>
+                    </div>
+                )}
+                <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+                    {['Log expense', 'Ask group help', 'Share resource', 'Add route'].map((label) => {
+                        const prompts = {
+                            'Log expense': 'I spent Rs 1200 on fertilizer today',
+                            'Ask group help': 'Ask my group for labour help for harvest tomorrow',
+                            'Share resource': 'Share my sprayer in the group and mark it available',
+                            'Add route': 'Add a weekly mandi route for my group',
+                        };
+                        return (
+                            <button
+                                key={label}
+                                type="button"
+                                onClick={() => setInput(prompts[label])}
+                                className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold whitespace-nowrap text-slate-600"
+                            >
+                                {label}
+                            </button>
+                        );
+                    })}
+                </div>
                 <div className="flex items-center gap-2 border-2 border-primary/30 rounded-2xl px-3 py-2 bg-slate-50 focus-within:border-primary/60 transition-colors">
                     <button className="p-1.5 text-slate-400 hover:text-primary transition-colors flex-shrink-0">
                         <ImageIcon className="w-5 h-5" />
@@ -342,7 +448,7 @@ const AIAssistantChatScreen = () => {
                     ) : (
                         <input ref={inputRef} type="text"
                             className="flex-1 bg-transparent outline-none text-slate-800 placeholder-slate-400 text-sm py-1"
-                            placeholder="Type your farming question..."
+                            placeholder="Ask or update by text or voice..."
                             value={input} onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown} disabled={isTyping} />
                     )}

@@ -59,6 +59,40 @@ export const ChatProvider = ({ children }) => {
         setMessages(prev => [...prev, ...newMessages]);
     };
 
+    const injectPestResult = (incomingPestResult) => {
+        if (!incomingPestResult) return;
+        if (messages.some(m => m.isPestResult)) return;
+
+        const label = incomingPestResult.predicted_pest_or_disease || incomingPestResult.disease || 'Crop issue';
+        const pestText =
+            `I reviewed your crop image and the likely issue is **${label}** (${incomingPestResult.confidence_pct || incomingPestResult.confidence_score || 0}% confidence).\n\n` +
+            `${incomingPestResult.description || 'Crop stress or disease indicators were detected.'}\n\n` +
+            `💡 **Immediate Tip:** ${incomingPestResult.tip || 'Scout nearby plants and confirm severity before spraying.'}`;
+
+        const newMessages = [
+            {
+                id: crypto.randomUUID(),
+                sender: 'user',
+                text: `📷 *Uploaded a pest or disease scan photo...*`,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            },
+            {
+                id: crypto.randomUUID(),
+                sender: 'ai',
+                text: pestText,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                isPestResult: true,
+                suggestions: [
+                    'How serious is this issue for my crop?',
+                    'What should I do today?',
+                    'Create a support ticket for this issue',
+                ],
+            }
+        ];
+
+        setMessages(prev => [...prev, ...newMessages]);
+    };
+
     const handleNewChat = () => {
         localStorage.removeItem('krishi_chat_messages');
         setMessages(buildInitialMessages());
@@ -69,7 +103,7 @@ export const ChatProvider = ({ children }) => {
         <ChatContext.Provider value={{
             messages, setMessages,
             sessionId, setSessionId,
-            injectSoilResult, handleNewChat
+            injectSoilResult, injectPestResult, handleNewChat
         }}>
             {children}
         </ChatContext.Provider>

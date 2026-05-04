@@ -5,8 +5,9 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, FileText, Loader2, Send, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { API_BASE } from '../../lib/apiBase';
 
-const API = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const API = API_BASE;
 
 const CATEGORIES = ['government_scheme','market_update','weather_advisory','pest_alert','best_practice','training','announcement','other'];
 

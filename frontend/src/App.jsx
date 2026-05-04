@@ -1,7 +1,7 @@
 /**
  * App — Root Component & Router
  * ─────────────────────────────
- * ProtectedLayout wrapper applies consistent pb-20
+ * ProtectedLayout wrapper applies consistent bottom spacing
  * to all BottomNav routes, preventing text overlap.
  */
 import React from 'react';
@@ -63,7 +63,7 @@ import { ChatProvider } from './contexts/ChatContext';
  */
 const ProtectedLayout = ({ children, noBottomPad }) => (
   <AuthGuard>
-    <div className={noBottomPad ? '' : 'pb-20'}>
+    <div className={noBottomPad ? '' : 'pb-24'}>
       {children}
     </div>
     <BottomNavigation />

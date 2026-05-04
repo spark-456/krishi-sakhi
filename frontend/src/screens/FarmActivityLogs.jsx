@@ -226,7 +226,7 @@ const FarmActivityLogs = () => {
 
             {/* FAB */}
             <button onClick={() => setShowModal(true)}
-                className="fixed bottom-24 right-4 max-w-md z-30 w-14 h-14 bg-primary text-white rounded-full shadow-lg shadow-primary/30 flex items-center justify-center hover:bg-primary/90 transition-all active:scale-95">
+                className="fixed bottom-28 right-4 max-w-md z-30 w-14 h-14 bg-primary text-white rounded-full shadow-lg shadow-primary/30 flex items-center justify-center hover:bg-primary/90 transition-all active:scale-95">
                 <Plus className="w-6 h-6" />
             </button>
 

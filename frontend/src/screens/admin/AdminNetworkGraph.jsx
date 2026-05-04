@@ -9,8 +9,9 @@ import * as d3 from 'd3';
 import { useAuth } from '../../hooks/useAuth';
 import { Loader2, ArrowLeft, Users, Sprout, MapPin, Handshake } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE } from '../../lib/apiBase';
 
-const API = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const API = API_BASE;
 
 // Visual config by node type
 const NODE_CONFIG = {

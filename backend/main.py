@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from routers import farms, crops, expenses, activity, advisory, ml_scans, auth, weather, ml_insights
 from routers import admin as admin_router, tickets, blog, cooperative, notifications
+from routers import yields, farmer_insights
 
 # ---------------------------------------------------------------------------
 # LAN IP detection — logs accessible URL for phone testing on same Wi-Fi
@@ -45,6 +46,7 @@ app.add_middleware(
 app.include_router(farms.router, prefix="/api/v1")
 app.include_router(crops.router, prefix="/api/v1")
 app.include_router(expenses.router, prefix="/api/v1")
+app.include_router(yields.router, prefix="/api/v1")
 app.include_router(activity.router, prefix="/api/v1")
 app.include_router(advisory.router, prefix="/api/v1")
 app.include_router(ml_scans.router, prefix="/api/v1")
@@ -56,6 +58,7 @@ app.include_router(tickets.router, prefix="/api/v1")
 app.include_router(blog.router, prefix="/api/v1")
 app.include_router(cooperative.router, prefix="/api/v1")
 app.include_router(notifications.router, prefix="/api/v1")
+app.include_router(farmer_insights.router, prefix="/api/v1")
 
 
 @app.on_event("startup")

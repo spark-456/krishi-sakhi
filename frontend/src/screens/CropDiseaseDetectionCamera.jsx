@@ -8,8 +8,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Camera, Scan, X, Loader2, ScanLine, Leaf } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+import { API_BASE } from '../lib/apiBase';
 
 const SOIL_EMOJI = {
     alluvial: '🌾',
@@ -152,9 +151,21 @@ const CropDiseaseDetectionCamera = () => {
                         advisoryText: scanResult.advisory_text,
                     }
                 } : {
-                    pestScanResult: scanResult // Generic pass-through for disease stub
+                    pestScanResult: scanResult,
+                    prefillMessage: `I scanned my crop and the likely issue is ${scanResult.predicted_pest_or_disease || scanResult.disease}. How serious is it and what should I do today?`,
                 }
             )
+        });
+    };
+
+    const handleRaiseTicketFromScan = () => {
+        if (!scanResult || scanMode !== 'pest') return;
+        navigate('/assistant', {
+            state: {
+                pestScanResult: scanResult,
+                prefillMessage: `Create a support ticket for my crop issue. The scan suggests ${scanResult.predicted_pest_or_disease || scanResult.disease}. Include that I need guidance urgently if needed.`,
+                autoSendPrefill: true,
+            }
         });
     };
 
@@ -421,6 +432,14 @@ const CropDiseaseDetectionCamera = () => {
                     <span>👩🏽‍🌾</span>
                     Ask Sakhi for Detailed Advisory
                 </button>
+                {isPest && (
+                    <button
+                        onClick={handleRaiseTicketFromScan}
+                        className="w-full py-3 bg-amber-500/90 hover:bg-amber-500 active:scale-95 text-white font-semibold text-sm rounded-2xl transition-all"
+                    >
+                        Raise Support Ticket from This Scan
+                    </button>
+                )}
                 <button
                     onClick={handleRetake}
                     className="w-full py-3 bg-white/10 hover:bg-white/20 active:scale-95 text-white font-semibold text-sm rounded-2xl transition-all border border-white/10"

@@ -13,7 +13,7 @@
 | 3 | `farms` | Profile | One to many per farmer |
 | 4 | `crop_records` | Crop Management | Many per farm, one active per farm |
 | 5 | `yield_records` | Crop Management | One per harvested crop_record |
-| 6 | `expense_logs` | Expenses | Many per crop_record |
+| 6 | `expense_logs` | Expenses | Many per farmer, optionally linked to farm/crop |
 | 6b | `activity_logs` | Farm Activity | Many per farm/crop |
 | 7 | `advisory_sessions` | Advisory | Many per farmer |
 | 8 | `advisory_messages` | Advisory | Many per session, grows indefinitely |
@@ -21,9 +21,21 @@
 | 10 | `pest_scans` | ML Outputs | One per pest image upload |
 | 11 | `crop_recommendation_requests` | ML Outputs | One per recommendation query |
 | 12 | `price_forecast_requests` | ML Outputs | One per price forecast query |
-| 13 | `ref_crops` | Reference | Static seed data, ~50–100 rows |
-| 14 | `ref_locations` | Reference | Static seed data, thousands of rows |
-| 15 | `ref_knowledge_documents` | Reference | One per ingested Dify document |
+| 13 | `notifications` | Alerts | Many per farmer |
+| 14 | `farmer_tickets` | Support | Many per farmer |
+| 15 | `ticket_messages` | Support | Many per ticket |
+| 16 | `blog_posts` | Admin Content | Many, mostly published by admins |
+| 17 | `blog_post_reads` | Admin Content | Many per farmer |
+| 18 | `cooperative_groups` | SakhiNet | Many |
+| 19 | `cooperative_memberships` | SakhiNet | Many per farmer and group |
+| 20 | `help_requests` | SakhiNet | Many per group |
+| 21 | `help_request_responses` | SakhiNet | Many per request |
+| 22 | `shared_resources` | SakhiNet | Many per group |
+| 23 | `group_messages` | SakhiNet | Many per group |
+| 24 | `common_routes` | SakhiNet | Many per group |
+| 25 | `ref_crops` | Reference | Static seed data, ~50–100 rows |
+| 26 | `ref_locations` | Reference | Static seed data, thousands of rows |
+| 27 | `ref_knowledge_documents` | Reference | One per ingested Dify document |
 
 ---
 
@@ -64,6 +76,11 @@ auth.users
             │               ├── pest_scans (1:many)
             │               └── crop_recommendation_requests (1:many)
             │
+            ├── notifications (1:many)
+            ├── farmer_tickets (1:many)
+            │       └── ticket_messages (1:many)
+            ├── blog_post_reads (1:many)
+            │
             ├── advisory_sessions (1:many)
             │       └── advisory_messages (1:many)
             │               ├── soil_scans (1:1)
@@ -71,11 +88,19 @@ auth.users
             │               ├── crop_recommendation_requests (1:1)
             │               └── price_forecast_requests (1:1)
             │
-            └── price_forecast_requests (1:many, also direct FK)
+            ├── price_forecast_requests (1:many, also direct FK)
+            └── cooperative_memberships (1:many)
+                    └── cooperative_groups (many:1)
+                            ├── help_requests (1:many)
+                            │       └── help_request_responses (1:many)
+                            ├── shared_resources (1:many)
+                            ├── group_messages (1:many)
+                            └── common_routes (1:many)
 
 ref_crops          — static lookup, no FK relationships
 ref_locations      — static lookup, no FK relationships
 ref_knowledge_documents — static lookup, no FK relationships
+blog_posts         — authored by farmers with role='admin'; optionally targeted by district/state
 ```
 
 ---
@@ -105,12 +130,13 @@ One row per registered user. Created immediately after successful phone OTP veri
 |---|---|---|---|
 | id | uuid | PK, FK → auth.users.id | Must equal the Supabase auth UID |
 | full_name | text | NOT NULL | |
-| preferred_language | text | NOT NULL, DEFAULT 'english', CHECK IN ('english','tamil','telugu') | Drives future UI localisation |
+| preferred_language | text | NOT NULL, DEFAULT 'english', CHECK IN ('english','telugu','hindi') | Drives UI and advisory language preferences |
 | state | text | NOT NULL | |
 | district | text | NOT NULL | Used as metadata filter in Dify RAG retrieval and for mandi price lookup |
 | block | text | | Sub-district administrative unit |
 | village | text | | |
 | onboarding_complete | boolean | NOT NULL, DEFAULT false | False until all onboarding steps completed |
+| role | text | NOT NULL, DEFAULT 'farmer', CHECK IN ('farmer','admin') | Admins can access dashboard, tickets, blog publishing, and nudge controls |
 | phone_number | text | | Tech debt: stored here as a workaround for prototype authentication |
 | created_at | timestamptz | NOT NULL, DEFAULT now() | |
 | updated_at | timestamptz | NOT NULL, DEFAULT now() | |
@@ -171,7 +197,7 @@ Tracks what is being grown on a specific farm in a specific season. Only one rec
 | sowing_date | date | | |
 | expected_harvest_date | date | | |
 | actual_harvest_date | date | | Null until status becomes 'harvested' |
-| growth_stage | text | CHECK IN ('germination','vegetative','flowering','maturity','post-harvest') | Updated manually or by advisory context |
+| growth_stage | text | CHECK IN ('land_prep','germination','sowing','vegetative','flowering','fruiting','maturity','harvest','post-harvest','post_harvest') | Updated manually, by AskSakhi actions, or by field workflows |
 | status | text | NOT NULL, DEFAULT 'active', CHECK IN ('active','harvested','abandoned') | |
 | created_at | timestamptz | NOT NULL, DEFAULT now() | |
 | updated_at | timestamptz | NOT NULL, DEFAULT now() | |
@@ -223,13 +249,14 @@ Post-harvest data. Created when the farmer logs their actual yield and sale pric
 
 ### `expense_logs`
 
-Line-item expense entries linked to a specific crop record. The FastAPI context assembler summarises recent expense_logs (total spend by category) and includes it in the advisory context block, enabling the advisory layer to factor in sunk costs when making market timing recommendations.
+Line-item expense entries for a farmer. Entries may be linked to a specific farm and may optionally be linked to a crop record, but the system also supports general farm expenses that are not crop-specific. The FastAPI context assembler includes recent expenses in the advisory context block so AskSakhi can reason about cost history when responding.
 
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | id | uuid | PK, DEFAULT gen_random_uuid() | |
-| crop_record_id | uuid | NOT NULL, FK → crop_records.id ON DELETE RESTRICT | |
+| crop_record_id | uuid | FK → crop_records.id ON DELETE RESTRICT | Optional crop linkage |
 | farmer_id | uuid | NOT NULL, FK → farmers.id | Denormalised |
+| farm_id | uuid | FK → farms.id ON DELETE SET NULL | Optional farm linkage |
 | category | text | NOT NULL, CHECK IN ('seeds','fertilizer','pesticide','labour','irrigation','equipment','other') | |
 | amount_inr | numeric | NOT NULL, CHECK (amount_inr > 0) | |
 | expense_date | date | NOT NULL | |
@@ -240,6 +267,7 @@ Line-item expense entries linked to a specific crop record. The FastAPI context 
 - Primary key on `id`
 - Index on `farmer_id`
 - Index on `crop_record_id`
+- Index on `farm_id`
 - Index on `expense_date` — for time-range summary queries in context assembly
 
 **RLS Policies:**
@@ -344,6 +372,99 @@ The most important table in the system. Every farmer query and every system resp
 ---
 
 ## Section 6 — ML Outputs Domain
+
+## Section 5b — Notifications, Support, and Admin Content
+
+### `notifications`
+
+In-app alert feed used for support ticket updates, SakhiNet activity, and proactive agronomy nudges. `dedupe_key` prevents the same automated nudge from being written repeatedly for the same farmer.
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| id | uuid | PK, DEFAULT gen_random_uuid() | |
+| farmer_id | uuid | NOT NULL, FK → farmers.id ON DELETE CASCADE | |
+| title | text | NOT NULL | Short heading shown in the notification feed |
+| message | text | NOT NULL | Main notification body |
+| type | text | NOT NULL, DEFAULT 'info' | Example values: `ticket`, `community`, `weather_nudge`, `crop_nudge`, `irrigation_nudge`, `harvest_nudge` |
+| is_read | boolean | NOT NULL, DEFAULT false | |
+| action_url | text | | Frontend route to open when tapped |
+| metadata | jsonb | NOT NULL, DEFAULT '{}'::jsonb | Optional structured payload like ticket_id, crop_id, rain forecast |
+| dedupe_key | text | | Optional unique signature for generated alerts |
+| created_at | timestamptz | NOT NULL, DEFAULT now() | |
+
+**Indexes:**
+- Primary key on `id`
+- Index on `(farmer_id, created_at DESC)`
+- Index on `(farmer_id, is_read, created_at DESC)`
+- Partial unique index on `(farmer_id, dedupe_key)` WHERE `dedupe_key IS NOT NULL`
+
+**RLS Policies:**
+- `SELECT`: `auth.uid() = farmer_id`
+- `UPDATE`: `auth.uid() = farmer_id`
+- `INSERT`: service role / backend only
+- `DELETE`: Disabled
+
+---
+
+### `farmer_tickets`
+
+Farmer-side support tickets escalated to admins or KVK operators. AskSakhi can now raise these conversationally.
+
+Key columns in active use: `farmer_id`, `category`, `priority`, `status`, `subject`, `description`, `assigned_admin_id`, `resolution_notes`, `resolved_at`, `created_at`, `updated_at`.
+
+**RLS Policies:**
+- Farmers can read their own tickets and create new ones
+- Admin access is mediated through backend role checks
+
+---
+
+### `ticket_messages`
+
+Threaded messages attached to a `farmer_tickets` row.
+
+Key columns in active use: `ticket_id`, `sender_id`, `message`, `is_admin_reply`, `created_at`.
+
+**RLS Policies:**
+- Farmers can read messages on their own tickets
+- Admin access is mediated through backend role checks
+
+---
+
+### `blog_posts`
+
+Admin-authored KVK or platform content displayed to farmers as published posts. Demo and representation content is seeded here during local setup.
+
+Key columns in active use: `author_id`, `title`, `summary`, `content`, `category`, `tags`, `target_district`, `target_state`, `cover_image_url`, `is_published`, `published_at`, `view_count`, `created_at`.
+
+**RLS / Access Pattern:**
+- Farmers read published posts through backend filtering
+- Admin creation, editing, publish/unpublish, and demo seeding happen through backend role checks
+
+---
+
+### `blog_post_reads`
+
+Farmer read receipts for published blog posts.
+
+Key columns in active use: `post_id`, `farmer_id`, `created_at`.
+
+---
+
+### SakhiNet tables in active use
+
+The following tables power the cooperative and community workflows currently exposed in the app and in AskSakhi actions:
+
+- `cooperative_groups`
+- `cooperative_memberships`
+- `help_requests`
+- `help_request_responses`
+- `shared_resources`
+- `group_messages`
+- `common_routes`
+
+These tables are membership-scoped through backend checks. Help requests can trigger group notifications, and AskSakhi can create new help requests conversationally.
+
+---
 
 ### `soil_scans`
 
@@ -501,7 +622,7 @@ Master crop list. Used to standardise crop names across the application and to s
 
 ### `ref_locations`
 
-Hierarchical location reference for Tamil Nadu and Andhra Pradesh. Used to validate and standardise location input during farmer onboarding and to power the district dropdown. Prevents free-text location strings from causing mandi price lookup failures.
+Hierarchical location reference used to validate and standardise onboarding and weather/market lookup geography. The current working dataset is aligned primarily with Telangana flows and can be extended regionally without changing application code.
 
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
@@ -641,6 +762,10 @@ Condition: Only fires when manually_corrected = false
 | `crop_records` | Own rows | Own rows | Own rows | ❌ |
 | `yield_records` | Own rows | Own rows | Own rows | ❌ |
 | `expense_logs` | Own rows | Own rows | Own rows | Own rows |
+| `activity_logs` | Own rows | Own rows | Own rows | Own rows |
+| `notifications` | Own rows | Service role | Own rows | ❌ |
+| `farmer_tickets` | Own rows | Own rows | Backend-mediated | ❌ |
+| `ticket_messages` | Own rows on owned tickets | Own rows on owned tickets | ❌ | ❌ |
 | `advisory_sessions` | Own rows | Own rows | Own rows (ended_at only) | ❌ |
 | `advisory_messages` | Own rows | Own rows | ❌ | ❌ |
 | `soil_scans` | Own rows | Service role | Service role | ❌ |
@@ -681,6 +806,8 @@ When initialising a fresh Supabase instance, migrations must be applied in this 
 018_storage_buckets.sql            -- bucket creation and storage RLS
 019_schema_reconciliation.sql      -- schema drift resolution: activity_logs, phone_number, crop_records updates
 020_advisory_session_dify_conv.sql -- phase 2 dify conversation continuity
+021_ref_locations_coords.sql       -- reference location coordinates for weather context
+022_notifications_and_nudges.sql   -- notifications feed, unread indexes, dedupe protection
 ```
 
 ---
@@ -696,27 +823,32 @@ Reads:
   1. farmers WHERE id = farmer_id
      → full_name, district, preferred_language
 
-  2. farms WHERE farmer_id = farmer_id (most recently updated)
-     → farm_name, area_acres, soil_type, irrigation_type
+  2. farms WHERE farmer_id = farmer_id
+     → farm_name, area_acres, soil_type, irrigation_type, latitude, longitude
 
-  3. crop_records WHERE farmer_id = farmer_id AND status = 'active'
-     → crop_name, season, growth_stage, sowing_date, expected_harvest_date
+  3. crop_records WHERE farmer_id = farmer_id
+     → crop_name, season, growth_stage, sowing_date, expected_harvest_date, actual_harvest_date, status
 
   4. expense_logs WHERE farmer_id = farmer_id
-     AND crop_record_id = (active crop record id)
-     AND expense_date >= now() - INTERVAL '30 days'
-     GROUP BY category
-     → SUM(amount_inr) per category
+     → recent line items for financial context and summaries
 
-  5. Open-Meteo API (external, not DB)
+  5. activity_logs WHERE farmer_id = farmer_id
+     → recent farm operations and AskSakhi-triggered actions
+
+  6. advisory_messages WHERE session_id = current session (recent few turns)
+     → short chat history for continuity
+
+  7. Open-Meteo API (external, not DB)
      → current temperature, humidity, rainfall, forecast
 
 Assembled into context_block_sent (jsonb):
   {
     "farmer": { name, district, language },
-    "farm": { name, area_acres, soil_type, irrigation_type },
-    "active_crop": { name, season, growth_stage, sowing_date },
-    "recent_expenses": { seeds: X, fertilizer: Y, ... },
+    "farms": [{ ... }],
+    "crops": [{ ... }],
+    "recent_expenses": [{ ... }],
+    "recent_activities": [{ ... }],
+    "chat_history": [{ farmer_input_text, response_text }],
     "weather": { temp, humidity, rainfall, forecast },
     "ml_outputs": { ... if image was uploaded this turn }
   }
@@ -724,5 +856,5 @@ Assembled into context_block_sent (jsonb):
 
 ---
 
-*Schema version: 1.0 — aligned with Krishi Sakhi research prototype and context.md v1.0*
+*Schema version: 1.1 — aligned with the AskSakhi action layer, notifications feed, and current Telangana-focused application flows*
 *Update this document before writing any migration file.*

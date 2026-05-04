@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+import { API_BASE } from './apiBase'
 
 export async function askAdvisory({ sessionId, inputChannel, farmerInputText, farmId, cropRecordId, token }) {
     const resp = await fetch(`${API_BASE}/api/v1/advisory/ask`, {
@@ -126,6 +126,54 @@ export async function getNotifications({ token, unreadOnly = false, limit = 25 }
     });
     if (!resp.ok) throw new Error(`Notifications fetch error ${resp.status}`);
     return resp.json();
+}
+
+export async function getFarmerToday({ token }) {
+    const resp = await fetch(`${API_BASE}/api/v1/farmer-insights/today`, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    })
+    if (!resp.ok) throw new Error(`Today view fetch error ${resp.status}`)
+    return resp.json()
+}
+
+export async function getYieldRecords({ token, cropRecordId = null }) {
+    const url = new URL(`${API_BASE}/api/v1/yields`)
+    if (cropRecordId) url.searchParams.append('crop_record_id', cropRecordId)
+    const resp = await fetch(url, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    })
+    if (!resp.ok) throw new Error(`Yield fetch error ${resp.status}`)
+    return resp.json()
+}
+
+export async function createYieldRecord({ payload, token }) {
+    const resp = await fetch(`${API_BASE}/api/v1/yields`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload),
+    })
+    if (!resp.ok) throw new Error(`Yield create error ${resp.status}`)
+    return resp.json()
+}
+
+export async function deleteYieldRecord({ yieldId, token }) {
+    const resp = await fetch(`${API_BASE}/api/v1/yields/${yieldId}`, {
+        method: 'DELETE',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    })
+    if (!resp.ok) throw new Error(`Yield delete error ${resp.status}`)
+    return resp.json()
 }
 
 export async function markNotificationRead({ notificationId, token, isRead = true }) {

@@ -20,29 +20,33 @@ def create_notification(
     metadata: Optional[dict[str, Any]] = None,
     dedupe_key: Optional[str] = None,
 ):
-    if dedupe_key:
-        existing = (
-            db.table("notifications")
-            .select("id")
-            .eq("farmer_id", farmer_id)
-            .eq("dedupe_key", dedupe_key)
-            .limit(1)
-            .execute()
-        )
-        if existing.data:
-            return existing.data[0]
+    try:
+        if dedupe_key:
+            existing = (
+                db.table("notifications")
+                .select("id")
+                .eq("farmer_id", farmer_id)
+                .eq("dedupe_key", dedupe_key)
+                .limit(1)
+                .execute()
+            )
+            if existing.data:
+                return existing.data[0]
 
-    payload = {
-        "farmer_id": farmer_id,
-        "title": title,
-        "message": message,
-        "type": notification_type,
-        "action_url": action_url,
-        "metadata": metadata or {},
-        "dedupe_key": dedupe_key,
-    }
-    result = db.table("notifications").insert(payload).execute()
-    return result.data[0] if result.data else None
+        payload = {
+            "farmer_id": farmer_id,
+            "title": title,
+            "message": message,
+            "type": notification_type,
+            "action_url": action_url,
+            "metadata": metadata or {},
+            "dedupe_key": dedupe_key,
+        }
+        result = db.table("notifications").insert(payload).execute()
+        return result.data[0] if result.data else None
+    except Exception as exc:
+        logger.warning("Skipping notification write because notifications storage is unavailable: %s", exc)
+        return None
 
 
 def create_notifications_for_farmers(

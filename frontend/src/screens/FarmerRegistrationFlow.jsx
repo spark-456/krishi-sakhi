@@ -13,6 +13,7 @@ import { ChevronRight, ChevronLeft, Leaf, Shield, CheckCircle2, MapPin, Loader2,
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
+import { API_BASE } from '../lib/apiBase';
 import { reverseGeocode } from '../lib/reverseGeocode';
 
 const FarmerRegistrationFlow = () => {
@@ -28,6 +29,7 @@ const FarmerRegistrationFlow = () => {
 
     const [formData, setFormData] = useState({
         name: '',
+        role: 'farmer',
         state: '',
         district: '',
         village: '',
@@ -147,9 +149,17 @@ const FarmerRegistrationFlow = () => {
     };
 
     const handleNext = () => {
-        if (step < 3) {
-            setStep(step + 1);
+        if (step === 1) {
+            setStep(2);
             setSubmitError('');
+        } else if (step === 2) {
+            if (formData.role === 'admin') {
+                // Admins don't need a farm, skip step 3 entirely
+                handleComplete();
+            } else {
+                setStep(3);
+                setSubmitError('');
+            }
         } else {
             handleComplete();
         }
@@ -176,7 +186,7 @@ const FarmerRegistrationFlow = () => {
                 }
 
                 // 1. Ask FastAPI backend to create the account via Service Role (bypassing limits)
-                let backendHost = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
+                let backendHost = API_BASE;
                 if (backendHost.endsWith('/')) backendHost = backendHost.slice(0, -1);
                 
                 const regRes = await fetch(`${backendHost}/api/v1/auth/register`, {
@@ -192,7 +202,7 @@ const FarmerRegistrationFlow = () => {
 
                 // 2. Actually sign them in locally to obtain a JWT Session
                 const { data: authData, error: signInErr } = await supabase.auth.signInWithPassword({
-                    email: `${phoneFromState}@ks.com`,
+                    email: `+91${phoneFromState}@ks.com`,
                     password: 'password123456'
                 });
 
@@ -206,16 +216,17 @@ const FarmerRegistrationFlow = () => {
             
             const phoneNumber = activeEmail ? activeEmail.split('@')[0] : phoneFromState;
             
-            // Insert or update farmer profile
+            // Insert or update user profile
             const { error: updateError } = await supabase
                 .from('farmers')
                 .upsert({
                     id: activeUserId,
-                    full_name: formData.name || 'Farmer',
+                    full_name: formData.name || (formData.role === 'admin' ? 'Admin' : 'Farmer'),
                     phone_number: phoneNumber,
                     state: formData.state,
                     district: formData.district,
                     village: formData.village || null,
+                    role: formData.role,
                     onboarding_complete: true,
                 });
 
@@ -238,7 +249,11 @@ const FarmerRegistrationFlow = () => {
                 });
             }
 
-            navigate('/dashboard', { replace: true });
+            if (formData.role === 'admin') {
+                navigate('/admin', { replace: true });
+            } else {
+                navigate('/dashboard', { replace: true });
+            }
         } catch (err) {
             console.error('[Registration] Unexpected error:', err);
             setSubmitError(`Something went wrong: ${err.message || err}`);
@@ -271,13 +286,13 @@ const FarmerRegistrationFlow = () => {
             <header className="bg-primary text-primary-foreground p-6 rounded-b-3xl shadow-md">
                 <div className="flex items-center gap-3 mb-4">
                     <div className="bg-white/20 p-2 rounded-xl"><Leaf className="w-6 h-6" /></div>
-                    <h1 className="text-2xl font-bold tracking-tight">Krishi Sakhi</h1>
+                    <h1 className="text-2xl font-bold tracking-tight">{formData.role === 'admin' ? 'KVK Registration' : 'Krishi Sakhi'}</h1>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
-                        <div className="h-full bg-white rounded-full transition-all duration-500" style={{ width: `${(step / 3) * 100}%` }} />
+                        <div className="h-full bg-white rounded-full transition-all duration-500" style={{ width: `${(step / (formData.role === 'admin' ? 2 : 3)) * 100}%` }} />
                     </div>
-                    <span className="text-sm font-medium">{step}/3</span>
+                    <span className="text-sm font-medium">{step}/{formData.role === 'admin' ? 2 : 3}</span>
                 </div>
             </header>
 
@@ -296,6 +311,26 @@ const FarmerRegistrationFlow = () => {
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium text-slate-700">Full Name</label>
                                 <input type="text" className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" placeholder="Enter your full name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+                            </div>
+
+                            <div className="space-y-1.5 mt-4">
+                                <label className="text-sm font-medium text-slate-700">I am a:</label>
+                                <div className="grid grid-cols-2 gap-3 mt-1">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setFormData({...formData, role: 'farmer'})}
+                                        className={`p-3 border rounded-xl font-semibold text-sm transition-colors ${formData.role === 'farmer' ? 'bg-primary border-primary text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                        👨🏽‍🌾 Farmer
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setFormData({...formData, role: 'admin'})}
+                                        className={`p-3 border rounded-xl font-semibold text-sm transition-colors ${formData.role === 'admin' ? 'bg-primary border-primary text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                        🛠️ Extension Worker
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Location Card */}

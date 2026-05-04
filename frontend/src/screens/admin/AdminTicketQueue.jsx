@@ -5,8 +5,9 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Ticket, Filter, ChevronRight, Loader2, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { API_BASE } from '../../lib/apiBase';
 
-const API = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const API = API_BASE;
 
 const statusColor  = { open:'bg-green-100 text-green-700', assigned:'bg-blue-100 text-blue-700', in_progress:'bg-amber-100 text-amber-700', waiting_farmer:'bg-purple-100 text-purple-700', resolved:'bg-slate-100 text-slate-600', closed:'bg-slate-100 text-slate-400' };
 const priorityColor= { low:'bg-slate-50 text-slate-500', medium:'bg-blue-50 text-blue-600', high:'bg-orange-50 text-orange-600', critical:'bg-red-100 text-red-700' };

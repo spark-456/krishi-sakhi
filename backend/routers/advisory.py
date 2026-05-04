@@ -66,6 +66,7 @@ async def ask_advisory(
         audio_b64=turn["audio_b64"],
         executed_actions=turn["executed_actions"],
         refresh_targets=turn["refresh_targets"],
+        trust_signals=turn["trust_signals"],
     )
 
 @router.post("/voice-chat")
@@ -104,6 +105,7 @@ async def voice_chat_endpoint(
         "was_deferred_to_kvk": turn["was_deferred_to_kvk"],
         "executed_actions": turn["executed_actions"],
         "refresh_targets": turn["refresh_targets"],
+        "trust_signals": turn["trust_signals"],
     }
 
 
@@ -175,10 +177,19 @@ async def _run_advisory_turn(
         tts_result = await generate_speech(response_text)
         audio_b64 = tts_result.get("audio_b64", "")
 
+    trust_signals = _build_trust_signals(
+        farmer_input_text=farmer_input_text,
+        context=refreshed_context,
+        executed_actions=action_result["executed_actions"],
+        response_text=response_text,
+        was_deferred_to_kvk=dify_resp.get("was_deferred_to_kvk", False),
+    )
+
     audit_payload = {
         **dify_resp,
         "executed_actions": action_result["executed_actions"],
         "refresh_targets": action_result["refresh_targets"],
+        "trust_signals": trust_signals,
     }
     await write_audit_log(session_id, farmer_input_text, audit_payload, refreshed_context)
 
@@ -189,4 +200,58 @@ async def _run_advisory_turn(
         "was_deferred_to_kvk": dify_resp.get("was_deferred_to_kvk", False),
         "executed_actions": action_result["executed_actions"],
         "refresh_targets": action_result["refresh_targets"],
+        "trust_signals": trust_signals,
+    }
+
+
+def _build_trust_signals(
+    farmer_input_text: str,
+    context: dict,
+    executed_actions: list[dict],
+    response_text: str,
+    was_deferred_to_kvk: bool,
+) -> dict:
+    sources = []
+    if context.get("weather"):
+        sources.append("weather")
+    if context.get("farms") or context.get("crops") or context.get("activities") or context.get("expenses"):
+        sources.append("farm records")
+    if context.get("knowledge_base"):
+        sources.append("knowledge base")
+    if context.get("soil_scans"):
+        sources.append("recent scans")
+    if context.get("chat_history"):
+        sources.append("recent chat")
+
+    if executed_actions:
+        confidence = "high"
+        reason = "I updated your records directly using your confirmed farm data."
+        recommendation_type = "action_confirmation"
+    elif was_deferred_to_kvk:
+        confidence = "medium"
+        reason = "This answer may require expert follow-up or local verification."
+        recommendation_type = "expert_escalation"
+    elif context.get("knowledge_base") or context.get("weather"):
+        confidence = "medium"
+        reason = "This advice is grounded in your current farm context plus available weather or knowledge inputs."
+        recommendation_type = "contextual_advisory"
+    else:
+        confidence = "low"
+        reason = "This answer is general guidance because limited farm-specific context was available."
+        recommendation_type = "general_guidance"
+
+    lower_input = (farmer_input_text or "").lower()
+    if any(word in lower_input for word in ["price", "market", "sell", "mandi"]) and context.get("live_price_forecasts"):
+        if "market forecast" not in sources:
+            sources.append("market forecast")
+        if confidence == "low":
+            confidence = "medium"
+
+    return {
+        "confidence": confidence,
+        "reason": reason,
+        "sources": sources,
+        "recommendation_type": recommendation_type,
+        "has_actions": bool(executed_actions),
+        "response_length": len(response_text or ""),
     }

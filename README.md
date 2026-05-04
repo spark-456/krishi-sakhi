@@ -225,6 +225,8 @@ All unsafe queries are deferred to the nearest **Krishi Vigyan Kendra (KVK)** an
 
 See `backend/.env.example` and `frontend/.env.example` for full reference.
 
+For local and LAN frontend use, `VITE_API_BASE_URL` is optional. If it is omitted, the frontend derives the backend host from the current app URL and targets backend port `8000`, which avoids breakage when your laptop gets a new private IP on another network.
+
 Important: keep real values only in local `.env` files. Do not paste live Supabase keys, Dify keys, Groq keys, or Git credentials into tracked markdown, scripts, or commits.
 
 ---

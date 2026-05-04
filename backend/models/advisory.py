@@ -19,3 +19,4 @@ class AdvisoryAskResponse(BaseModel):
     audio_b64: Optional[str] = None
     executed_actions: list[dict] = Field(default_factory=list)
     refresh_targets: list[str] = Field(default_factory=list)
+    trust_signals: dict = Field(default_factory=dict)
